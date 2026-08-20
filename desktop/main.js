@@ -24,6 +24,7 @@ const CURSOR_MS = 140;
 /* `--smoke` boots the app, checks the window came up where it should and
    exits. CI runs it headless, since a window cannot be unit-tested. */
 const SMOKE = process.argv.includes('--smoke');
+let seeding = false;   /* smoke only: the test is writing the state file itself */
 
 let win = null;
 let tray = null;
@@ -410,6 +411,19 @@ async function runSmoke() {
   note('noteReachedDisk',
     Array.isArray(onDisk.notes) && onDisk.notes.some((n) => n.title === 'выживает ли заметка'));
 
+  /* the race that matters: type, then quit at once, leaving no time for the
+     panel's own debounce to expire */
+  await win.webContents.executeJavaScript(
+    "const t2 = document.getElementById('noteTitle');"
+    + "t2.value = 'напечатано и сразу выход';"
+    + "t2.dispatchEvent(new Event('input', { bubbles: true }));");
+  win.webContents.send('flush');          /* exactly what before-quit does */
+  await wait(150);
+  flushState();
+  const afterRush = JSON.parse(fsSync.readFileSync(statePath(), 'utf8'));
+  note('lastKeystrokesSurviveQuit',
+    afterRush.notes.some((n) => n.title === 'напечатано и сразу выход'));
+
   await win.webContents.executeJavaScript(
     "document.getElementById('noteBackBtn').click()");
   await wait(300);
@@ -468,12 +482,17 @@ async function runSmoke() {
 
   /* adding notes grows it, up to the screen, and then the list scrolls */
   const emptyList = win.getBounds().height;
+  /* Seeding straight into the file, then reloading, races the panel: on its
+     way out it hands over the notes it still holds, which would overwrite
+     these. Ignore its saves until the reload has landed. */
+  seeding = true;
   state.notes = Array.from({ length: 40 }, (_, i) => ({
     id: `bulk${i}`, title: `Заметка ${i + 1}`, body: 'т', updated: Date.now() - i * 1000,
   }));
   writeState();
   win.reload();                      /* the real path: file -> renderer -> size */
   await wait(2500);
+  seeding = false;
   const fullList = win.getBounds();
   note('notesGrowWindow', fullList.height > emptyList);
   note('neverTallerThanScreen', fullList.height <= wa.height);
@@ -544,6 +563,7 @@ ipcMain.handle('state:load', async () => {
 });
 
 ipcMain.on('state:save', (_e, patch) => {
+  if (seeding) return;
   if (patch.phrases !== undefined) state.phrases = patch.phrases;
   if (patch.notes !== undefined) state.notes = patch.notes;
   if (patch.ui !== undefined) state.ui = patch.ui;
