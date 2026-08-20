@@ -16,6 +16,7 @@ const SLICE = { [STORE.phrases]: 'phrases', [STORE.notes]: 'notes', [STORE.ui]: 
 /* Folded, the panel becomes a plain app icon parked past the top-left corner.
    The shell owns that geometry; here it is only the size of the button. */
 const PANEL_WIDTH = 320;
+const FOLD_MS = 220;   /* matches the shell's travel time */
 
 const DEFAULT_PHRASES = [
   'Сделал руками дважды — на третий раз automate it.',
@@ -183,9 +184,11 @@ function renderPhraseRows(focusIndex = -1) {
       + '<path d="M3 5h10M6.5 5V3.5h3V5M5 5l.6 8h4.8L11 5" fill="none" stroke="currentColor"'
       + ' stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     del.addEventListener('click', () => {
+      const keepScroll = phraseRows.scrollTop;   /* the list is rebuilt below */
       phrases.splice(i, 1);
       save(STORE.phrases, phrases);
       renderPhraseRows();
+      phraseRows.scrollTop = keepScroll;
       renderPhrase(false);
     });
 
@@ -485,6 +488,7 @@ function desiredHeight() {
 /* Every change of content — a view opening, a note added, a phrase wrapping
    onto another line — reports a new size, collapsed into one frame. */
 let sizeFrame = 0;
+let settleTimer = null;
 let measuring = false;
 let lastSent = '';
 
@@ -496,6 +500,17 @@ function scheduleSize() {
        before a fold would otherwise land afterwards and undo it */
     if (!ui.hidden) reportSize();
   });
+
+  /* And once more after everything stops moving. A height read in the middle
+     of an animation is a real height, so it is neither wrong nor repeated —
+     but it can be the last one sent, leaving the window a little short of
+     what the content finally needs. */
+  clearTimeout(settleTimer);
+  settleTimer = setTimeout(() => {
+    if (ui.hidden) return;
+    lastSent = '';
+    reportSize();
+  }, 350);
 }
 
 /* Tells the shell how much room the panel needs right now. Folding is the only
@@ -642,6 +657,7 @@ function setMagnet(on) {
 /* ---------- fold / unfold ---------- */
 
 let foldTimer = null;
+let iconTimer = null;
 
 /* Nothing to place any more: the icon always sits in the same corner. In the
    browser that corner is the viewport's, on the desktop it is the screen's and
@@ -680,14 +696,24 @@ function setHidden(hidden) {
     /* the window and the panel move together: no bare rectangle is ever left
        standing while one waits for the other */
     if (hidden) {
-      /* icon first, geometry second */
-      collapseNow();
-      foldTimer = setTimeout(() => { stowPanel(); HOST.fold(true); }, 140);
+      /* The panel bows out, the window travels dark, and the icon appears
+         only as it arrives — so no yellow shape is ever seen at panel size. */
+      armSensor(true);
+      panel.classList.add('panel--gone');
+      clearTimeout(iconTimer);
+      foldTimer = setTimeout(() => {
+        stowPanel();
+        HOST.fold(true);
+        iconTimer = setTimeout(() => tab.classList.add('is-visible'), FOLD_MS - 10);
+      }, 140);
     } else {
-      /* room first, panel second — it appears only once the window fits it */
+      /* and the other way: the icon goes at once, the window travels dark,
+         the panel arrives at the end */
       clearTimeout(foldTimer);
+      clearTimeout(iconTimer);
       HOST.fold(false);
-      foldTimer = setTimeout(expandNow, 240);
+      iconTimer = setTimeout(() => tab.classList.remove('is-visible'), 10);
+      foldTimer = setTimeout(expandNow, FOLD_MS + 10);
     }
     save(STORE.ui, ui);
     return;
@@ -808,7 +834,7 @@ async function start() {
   if (ui.hidden) {
     collapseNow();
     stowPanel();
-    /* started up already folded: the shell has to park the window too */
+    /* started up already folded: nothing travels, so the icon is just there */
     if (DESKTOP) HOST.fold(true);
   }
 

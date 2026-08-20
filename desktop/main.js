@@ -480,6 +480,23 @@ async function runSmoke() {
   note('phraseListResizesWindow', onPhrases > onMain + 40);
   note('windowMatchesWhatPanelWants', await matchesWanted());
 
+  /* nothing the panel draws may end up outside the window it asked for */
+  const fitsCheck = () => win.webContents.executeJavaScript(`(() => {
+    const btn = document.getElementById('newNoteBtn');
+    return Math.ceil(btn.getBoundingClientRect().bottom) <= window.innerHeight;
+  })()`);
+
+  await click('newNoteBtn');
+  await wait(250);
+  await win.webContents.executeJavaScript(
+    "const t3 = document.getElementById('noteTitle');"
+    + "t3.value = 'третья';"
+    + "t3.dispatchEvent(new Event('input', { bubbles: true }));");
+  await wait(500);
+  await click('noteBackBtn');
+  await wait(900);
+  note('newNoteButtonStaysInsideWindow', await fitsCheck());
+
   /* adding notes grows it, up to the screen, and then the list scrolls */
   const emptyList = win.getBounds().height;
   /* Seeding straight into the file, then reloading, races the panel: on its
