@@ -11,6 +11,8 @@
   --accent:    #8ab4ff;   /*  8.6:1 on --bg */
   --danger:    #ff8a8a;
 
+  --width: 320px;
+
   --r-lg: 14px;
   --r-md: 10px;
   --r-sm: 8px;
@@ -45,33 +47,76 @@ body {
   white-space: nowrap;
 }
 
-/* ---------- panel ---------- */
+/* thin scrollbars everywhere inside the panel */
+.view,
+.note-list,
+.phrase-rows,
+.textarea {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.view::-webkit-scrollbar,
+.note-list::-webkit-scrollbar,
+.phrase-rows::-webkit-scrollbar,
+.textarea::-webkit-scrollbar { width: 8px; }
+
+.view::-webkit-scrollbar-thumb,
+.note-list::-webkit-scrollbar-thumb,
+.phrase-rows::-webkit-scrollbar-thumb,
+.textarea::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+}
+
+/* ---------- panel: folds sideways into its own right edge ---------- */
 
 .panel {
   position: fixed;
   top: 24px;
   right: 24px;
-  width: 320px;
+  left: auto;
+  display: grid;
+  grid-template-columns: 1fr;
   max-height: calc(100vh - 48px);
-  display: flex;
-  flex-direction: column;
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
   overflow: hidden;
-  transition: opacity .18s var(--ease), transform .18s var(--ease);
+  transition:
+    grid-template-columns .28s var(--ease),
+    border-color .28s var(--ease),
+    box-shadow .28s var(--ease);
 }
 
-.panel--hidden {
-  opacity: 0;
-  transform: translateX(12px) scale(.98);
-  pointer-events: none;
+.panel--collapsed {
+  grid-template-columns: 0fr;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .panel--dragging {
   transition: none;
   box-shadow: 0 16px 40px rgba(0, 0, 0, .55);
+}
+
+/* the fold column: content is pinned to the right, so it is clipped
+   from the left as the column closes */
+.panel__fold {
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.panel__content {
+  width: var(--width);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: calc(100vh - 48px);
 }
 
 /* ---------- title bar ---------- */
@@ -80,6 +125,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: none;
   padding: 8px 8px 8px 12px;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
@@ -123,6 +169,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: none;
   margin: -4px 0 0;
 }
 
@@ -133,9 +180,13 @@ body {
   text-align: center;
 }
 
-.subbar__spacer { width: 32px; flex: none; }
-
 /* ---------- phrase ---------- */
+
+.phrase {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;          /* keeps the buttons off the last line */
+}
 
 .phrase__text {
   margin: 0;
@@ -170,6 +221,7 @@ body {
 
 .btn:hover { background: #2f3542; }
 .btn:active { background: #353c4b; }
+.btn:disabled { opacity: .5; cursor: default; }
 
 .btn--ghost {
   flex: none;
@@ -214,7 +266,7 @@ body {
   outline-offset: 2px;
 }
 
-.row { display: flex; gap: 8px; }
+.row { display: flex; gap: 8px; flex: none; }
 
 /* ---------- notes ---------- */
 
@@ -222,6 +274,7 @@ body {
   border-top: 1px solid var(--line);
   margin: 0 -16px -16px;
   padding: 0 16px;
+  flex: none;
 }
 
 .notes__toggle {
@@ -290,26 +343,42 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  max-height: 216px;      /* ~4 items, then it scrolls */
+  overflow-y: auto;
+}
+
+.note-row {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  transition: background .16s var(--ease), border-color .16s var(--ease);
+}
+
+.note-row:hover {
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+
+.note-row.is-confirming {
+  border-color: var(--danger);
+  background: var(--surface-2);
 }
 
 .note-item {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   display: block;
-  padding: 8px 12px;
+  padding: 8px 4px 8px 12px;
   font: inherit;
   font-size: 16px;
   text-align: left;
   color: var(--text);
-  background: var(--surface);
-  border: 1px solid transparent;
-  border-radius: var(--r-md);
+  background: transparent;
+  border: 0;
   cursor: pointer;
-  transition: background .16s var(--ease), border-color .16s var(--ease);
-}
-
-.note-item:hover {
-  background: var(--surface-2);
-  border-color: var(--line);
 }
 
 .note-item__title {
@@ -325,20 +394,86 @@ body {
   color: var(--muted);
 }
 
+.note-del {
+  align-self: center;
+  margin-right: 4px;
+}
+
+.note-del .del-text {
+  display: none;
+  font-size: 14px;
+  color: var(--danger);
+}
+
+.note-row.is-confirming .note-del {
+  width: auto;
+  padding: 0 8px;
+  color: var(--danger);
+}
+
+.note-row.is-confirming .note-del svg { display: none; }
+.note-row.is-confirming .note-del .del-text { display: block; }
+
 .empty,
 .hint {
   margin: 0;
   font-size: 14px;
   color: var(--muted);
+  flex: none;
 }
 
 .empty { padding: 4px 0 12px; }
+
+/* ---------- phrase editor ---------- */
+
+.phrase-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  max-height: 44vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.phrase-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 4px 4px 4px 8px;
+  transition: border-color .16s var(--ease);
+}
+
+.phrase-row:focus-within { border-color: var(--accent); }
+
+.phrase-row__input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 4px;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  resize: none;
+  overflow: hidden;
+}
+
+.phrase-row__input:focus { outline: none; }
+.phrase-row__input::placeholder { color: var(--muted); }
+
+.phrase-row .icon-btn { align-self: center; }
 
 /* ---------- inputs ---------- */
 
 .input,
 .textarea {
   width: 100%;
+  flex: none;
   padding: 8px 12px;
   font: inherit;
   font-size: 16px;
@@ -354,11 +489,11 @@ body {
 .textarea::placeholder { color: var(--muted); }
 
 .textarea {
-  min-height: 180px;
   flex: 1;
+  min-height: 140px;
+  max-height: 44vh;
+  overflow-y: auto;
 }
-
-.textarea--tall { min-height: 220px; }
 
 /* ---------- edge tab ---------- */
 
@@ -374,12 +509,11 @@ body {
   padding: 0;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-right: 0;
-  border-radius: var(--r-sm) 0 0 var(--r-sm);
+  border-radius: var(--r-sm);
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
-  transition: opacity .18s var(--ease), width .18s var(--ease), background .16s var(--ease);
+  transition: opacity .2s var(--ease) .08s, width .16s var(--ease), background .16s var(--ease);
 }
 
 .tab.is-visible {

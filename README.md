@@ -21,13 +21,17 @@ without reminding myself to?
 ## Features
 
 - **Draggable panel.** Move it by the title bar; the position is remembered.
-- **Collapse to the edge.** Hides into a thin tab, one click to bring it back.
+- **Folds sideways into its own edge**, leaving a thin tab; one click brings it
+  back.
 - **Random phrase** on start, a button for the next one, and a slow auto-change
   every 15 minutes.
-- **Editable phrase list** right inside the panel — one line per phrase, with a
-  reset to the defaults.
+- **Editable phrase list**: one block per phrase, each growing to fit its text,
+  each with its own delete button. Changes save as you type.
 - **Notes**, collapsed by default: a list of titles with dates, click to open,
-  edit with autosave, delete. Empty notes are dropped instead of saved.
+  edit with autosave. Delete either from the list — one confirming tap — or from
+  inside the note. Empty notes are dropped instead of saved.
+- **Fixed footprint.** The note list, the note text and the phrase list scroll
+  inside the panel, so it does not grow with the amount of content.
 - Everything is kept in `localStorage` and survives a reload.
 
 ## Stack
