@@ -250,6 +250,7 @@ async function runSmoke() {
 
   /* folding: the window must end up exactly the size of the tab, not a
      panel-sized rectangle painted yellow */
+  const beforeFold = win.getBounds();
   await click('hideBtn');
   await wait(700);
   const folded = win.getBounds();
@@ -257,7 +258,7 @@ async function runSmoke() {
      the panel and the tab covers it */
   note('foldedToTabSize', folded.width <= 40 && folded.height <= 130);
   note('foldedFlush', isFlush(folded, wa, state.window.edge));
-  note('foldedCentred', Math.abs((folded.y + folded.height / 2) - (opened.y + opened.height / 2)) <= 2);
+  note('foldedCentred', Math.abs((folded.y + folded.height / 2) - (beforeFold.y + beforeFold.height / 2)) <= 2);
 
   await click('tab');
   await wait(700);
@@ -318,6 +319,18 @@ async function runSmoke() {
   await wait(400);
 
   /* every view has its own height and the window has to follow */
+  /* does the window equal bar + the view's unconstrained content? */
+  const matchesWanted = async () => {
+    const wanted = await win.webContents.executeJavaScript(`(() => {
+      const v = document.querySelector('.view:not(.view--hidden)');
+      const c = document.querySelector('.panel__content');
+      const cap = c.style.maxHeight; c.style.maxHeight = 'none';
+      const h = document.getElementById('bar').offsetHeight + v.scrollHeight;
+      c.style.maxHeight = cap; return Math.ceil(h);
+    })()`);
+    return Math.abs(win.getBounds().height - wanted) <= 2;
+  };
+
   const probe = () => win.webContents.executeJavaScript(`(() => {
     const v = document.querySelector('.view:not(.view--hidden)');
     return { view: v && v.id, scroll: v && v.scrollHeight, client: v && v.clientHeight,
@@ -334,8 +347,8 @@ async function runSmoke() {
   await click('phrasesBackBtn');
   await wait(500);
   const backToMain = win.getBounds().height;
-  note('phraseListResizesWindow', onPhrases !== onMain);
-  note('leavingViewRestoresHeight', Math.abs(backToMain - onMain) <= 4);
+  note('phraseListResizesWindow', onPhrases > onMain + 40);
+  note('windowMatchesWhatPanelWants', await matchesWanted());
 
   /* adding notes grows it, up to the screen, and then the list scrolls */
   const emptyList = win.getBounds().height;
