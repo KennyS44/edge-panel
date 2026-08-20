@@ -691,7 +691,11 @@ body.is-desktop { background: var(--bg); }
   width: 100%;
 }
 
-.is-desktop .view { flex: 1 1 auto; }
+/* The view must never grow to fill the window: it is the thing being measured,
+   and a stretched box reports the window's height back as the height it wants,
+   which pins the window at whatever size it already had. It may still shrink,
+   which is what turns it into a scroller once the screen runs out. */
+.is-desktop .view { flex: 0 1 auto; }
 
 /* the window shrinks and the panel steps aside; no CSS fold in this build */
 .panel--gone {
