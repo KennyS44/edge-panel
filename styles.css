@@ -688,7 +688,10 @@ body.is-desktop { background: var(--bg); }
    can never lock the window at its current height. */
 .is-desktop .panel__content {
   max-height: 100vh;
-  width: 100%;
+  /* Not stretched to the window. Stretching squeezed the view, the view
+     squeezed the scrollers inside it, and everything shrank to fit whatever
+     the window already was — so the panel could never say it wanted more. */
+  align-self: flex-start;
 }
 
 /* The view must never grow to fill the window: it is the thing being measured,
