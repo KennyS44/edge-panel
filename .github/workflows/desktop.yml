@@ -56,6 +56,16 @@ jobs:
       - name: Build the installer
         run: npx electron-builder --publish never
 
+      # what the install folder will actually look like
+      - name: Show the packaged layout
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          echo "top level:"; ls dist/win-unpacked
+          echo "files at top level: $(ls -1 dist/win-unpacked | wc -l)"
+          echo "locales: $(ls -1 dist/win-unpacked/locales | wc -l)"
+          echo "resources:"; ls dist/win-unpacked/resources
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}

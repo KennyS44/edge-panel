@@ -38,11 +38,24 @@ let revealed = false;
 
 /* ---------- state file ---------- */
 
-const statePath = () => path.join(app.getPath('userData'), 'state.json');
+/* Everything the app writes lives under one `data` folder rather than loose in
+   userData — room for the pictures that are coming, and a folder you can copy
+   somewhere safe in one go. */
+const dataDir = () => path.join(app.getPath('userData'), 'data');
+const statePath = () => path.join(dataDir(), 'state.json');
+const legacyStatePath = () => path.join(app.getPath('userData'), 'state.json');
 
 async function loadState() {
   try {
-    const raw = await fs.readFile(statePath(), 'utf8');
+    let raw;
+    try {
+      raw = await fs.readFile(statePath(), 'utf8');
+    } catch {
+      /* older versions kept it a level up: move it in, keep the notes */
+      raw = await fs.readFile(legacyStatePath(), 'utf8');
+      await fs.mkdir(dataDir(), { recursive: true });
+      await fs.rename(legacyStatePath(), statePath());
+    }
     const parsed = JSON.parse(raw);
     state = { phrases: null, notes: null, ui: {}, window: {}, ...parsed };
   } catch {

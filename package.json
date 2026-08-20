@@ -26,21 +26,36 @@
     ],
     "win": {
       "target": "nsis",
-      "artifactName": "EdgePanel-${version}-setup.${ext}"
+      "artifactName": "EdgePanel-${version}-setup.${ext}",
+      "icon": "build/icon.png"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "menuCategory": "Edge Panel",
+      "shortcutName": "Edge Panel",
+      "uninstallDisplayName": "Edge Panel ${version}",
+      "createDesktopShortcut": true,
+      "deleteAppDataOnUninstall": false
     },
     "mac": {
       "target": "dmg",
       "category": "public.app-category.productivity",
-      "artifactName": "EdgePanel-${version}-${arch}.${ext}"
+      "artifactName": "EdgePanel-${version}-${arch}.${ext}",
+      "icon": "build/icon.png"
     },
     "linux": {
       "target": "AppImage",
       "category": "Utility",
-      "artifactName": "EdgePanel-${version}.${ext}"
-    }
+      "artifactName": "EdgePanel-${version}.${ext}",
+      "icon": "build/icon.png"
+    },
+    "compression": "maximum",
+    "electronLanguages": [
+      "en-US",
+      "ru"
+    ],
+    "removePackageScripts": true,
+    "removePackageKeywords": true
   }
 }
