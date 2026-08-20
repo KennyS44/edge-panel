@@ -650,6 +650,7 @@ body {
 
 .tab {
   position: fixed;
+  z-index: 3;            /* above the sensor, or it would eat the click */
   left: 0;
   top: 8px;
   width: 48px;
