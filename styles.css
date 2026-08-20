@@ -638,7 +638,7 @@ body {
 
 .edge-sensor {
   position: fixed;
-  left: 0;
+  right: 0;
   top: 0;
   width: 24px;
   height: 140px;
@@ -651,7 +651,7 @@ body {
 .tab {
   position: fixed;
   z-index: 3;            /* above the sensor, or it would eat the click */
-  left: 0;
+  right: 0;
   top: 8px;
   width: 48px;
   height: 48px;
@@ -663,8 +663,8 @@ body {
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
-  transform: translateX(-44px);
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
+  transform: translateX(44px);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 12px 100%, 0 calc(100% - 12px));
   transition:
     opacity .16s var(--ease),
     transform .18s var(--ease),
@@ -751,4 +751,11 @@ body.is-desktop { background: var(--bg); }
   height: auto;
   transform: none;
   transition: opacity .14s var(--ease), background .16s var(--ease);
+  -webkit-app-region: no-drag;
 }
+
+/* A drag region swallows clicks whether or not anything is drawn there, and a
+   folded window is all title bar — which is why the icon could not be clicked.
+   Folded, nothing drags. */
+.is-desktop .panel--gone,
+.is-desktop .panel--gone .bar { -webkit-app-region: no-drag; }

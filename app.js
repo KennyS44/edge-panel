@@ -776,7 +776,11 @@ async function start() {
   magnetBtn.classList.toggle('is-on', ui.magnet);
   magnetBtn.setAttribute('aria-pressed', String(ui.magnet));
   applyPlacement();
-  if (ui.hidden) collapseNow();
+  if (ui.hidden) {
+    collapseNow();
+    /* started up already folded: the shell has to park the window too */
+    if (DESKTOP) HOST.fold(true);
+  }
 
   if (DESKTOP) {
     /* Two watchers, because they catch different things: the observer sees

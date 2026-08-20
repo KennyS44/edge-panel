@@ -13,7 +13,7 @@ const fsSync = require('node:fs');
 const EDGES = ['left', 'right', 'top', 'bottom'];
 const DEFAULT_SIZE = { width: 320, height: 420 };
 
-/* Folded, the window becomes a plain app icon and walks off the top-left
+/* Folded, the window becomes a plain app icon and walks off the top-right
    corner, leaving a hairline behind so the desktop icons stay clear. Brushing
    that corner with the cursor slides it back out. */
 const ICON = 48;
@@ -166,8 +166,9 @@ function snapToEdge() {
 
 function iconBounds(hiding) {
   const wa = (parkDisplay || screen.getPrimaryDisplay()).workArea;
+  const right = wa.x + wa.width;
   return {
-    x: hiding ? wa.x - (ICON - PEEK) : wa.x,
+    x: hiding ? right - PEEK : right - ICON,
     y: wa.y + 8,
     width: ICON,
     height: ICON,
@@ -183,7 +184,7 @@ function setRevealed(on) {
 /* the corner you brush to call the icon back out */
 function nearCorner(point) {
   const wa = (parkDisplay || screen.getPrimaryDisplay()).workArea;
-  return point.x <= wa.x + SENSOR.width
+  return point.x >= wa.x + wa.width - SENSOR.width
     && point.y >= wa.y
     && point.y <= wa.y + SENSOR.height;
 }
@@ -327,11 +328,19 @@ async function runSmoke() {
   await wait(900);
   const folded = win.getBounds();
   note('foldedToIcon', folded.width === ICON && folded.height === ICON);
-  note('parkedPastCorner', folded.x === wa.x - (ICON - PEEK));
+  note('parkedPastCorner', folded.x === wa.x + wa.width - PEEK);
   note('parkedAtTop', folded.y === wa.y + 8);
 
+  /* the whole icon has to answer the mouse: nothing may cover it, and a
+     folded window must not be one big drag region */
+  note('iconTakesTheClick', await win.webContents.executeJavaScript(
+    "document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2)"
+    + ".closest('#tab') !== null"));
+  note('nothingDragsWhileFolded', await win.webContents.executeJavaScript(
+    "getComputedStyle(document.getElementById('bar')).getPropertyValue('-webkit-app-region') !== 'drag'"));
+
   /* the corner test itself, which is what the watcher runs on every tick */
-  note('cornerZoneCatchesTheEdge', nearCorner({ x: wa.x + 5, y: wa.y + 20 }));
+  note('cornerZoneCatchesTheEdge', nearCorner({ x: wa.x + wa.width - 5, y: wa.y + 20 }));
   note('cornerZoneIgnoresTheRest', !nearCorner({ x: wa.x + 300, y: wa.y + 400 }));
 
   /* the cursor cannot be moved in here, so the slide is driven directly —
@@ -339,10 +348,10 @@ async function runSmoke() {
   watchCursor(false);
   setRevealed(true);
   await wait(400);
-  note('revealSlidesOut', win.getBounds().x === wa.x);
+  note('revealSlidesOut', win.getBounds().x === wa.x + wa.width - ICON);
   setRevealed(false);
   await wait(400);
-  note('hidesAgainWhenCursorLeaves', win.getBounds().x === wa.x - (ICON - PEEK));
+  note('hidesAgainWhenCursorLeaves', win.getBounds().x === wa.x + wa.width - PEEK);
   watchCursor(true);
 
   await click('tab');
@@ -396,7 +405,7 @@ async function runSmoke() {
   await click('hideBtn');
   await wait(900);
   const foldedFree = win.getBounds();
-  note('freePanelParksToo', foldedFree.x === wa.x - (ICON - PEEK) && foldedFree.width === ICON);
+  note('freePanelParksToo', foldedFree.x === wa.x + wa.width - PEEK && foldedFree.width === ICON);
   await click('tab');
   await wait(900);
   await click('magnetBtn');
