@@ -50,7 +50,8 @@ On the desktop it also:
   panel sits beside the taskbar, not under it.
 - **Handles several monitors.** The edge is computed on whichever display the
   window is currently on, so dragging it to the next screen sticks it there.
-- **Keeps notes in a file** in `userData`, not in browser storage.
+- **Keeps notes in a file** under a single `data` folder in the app's user
+  directory, not in browser storage — one folder to copy if you want a backup.
 
 ## Look
 
@@ -76,6 +77,15 @@ Around them, `desktop/` holds a thin Electron shell:
 The split is deliberate. The page never learns it is inside Electron beyond
 one feature check, and the shell never touches the interface: it is told how
 much room the panel needs and answers with a window that size.
+
+## What the installer leaves behind
+
+Most of an Electron install folder cannot be tidied away: Windows loads the
+Chromium libraries, the `.pak` data and the V8 snapshots from beside the
+executable, and moving them into subfolders stops the app from starting. So the
+cleanup goes as far as it can without breaking anything — 20 items at the top
+level, two locales instead of fifty-five, everything of ours inside
+`resources/app.asar`, and the app's own data in one `data` folder.
 
 ## Building
 
