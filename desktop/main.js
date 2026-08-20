@@ -318,9 +318,18 @@ async function runSmoke() {
   await wait(400);
 
   /* every view has its own height and the window has to follow */
+  const probe = () => win.webContents.executeJavaScript(`(() => {
+    const v = document.querySelector('.view:not(.view--hidden)');
+    return { view: v && v.id, scroll: v && v.scrollHeight, client: v && v.clientHeight,
+             bar: document.getElementById('bar').offsetHeight,
+             win: window.innerHeight };
+  })()`);
+
   const onMain = win.getBounds().height;
+  const mainProbe = await probe();
   await click('editPhrasesBtn');
   await wait(500);
+  const phrasesProbe = await probe();
   const onPhrases = win.getBounds().height;
   await click('phrasesBackBtn');
   await wait(500);
@@ -349,6 +358,7 @@ async function runSmoke() {
     edge: state.window.edge, workArea: wa,
     opened, folded, reopened, shut, open, free, foldedFree,
     heights: { onMain, onPhrases, backToMain, emptyList, fullList: fullList.height },
+    mainProbe, phrasesProbe,
     checks,
   }));
   console.log(failed.length ? `SMOKE FAILED: ${failed.join(', ')}` : 'SMOKE OK');
