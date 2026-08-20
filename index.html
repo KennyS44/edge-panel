@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Edge Panel</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="panel" id="panel">
+  <header class="bar" id="bar">
+    <span class="bar__grip" aria-hidden="true"></span>
+    <span class="bar__title">Edge</span>
+    <button class="icon-btn" id="hideBtn" type="button" title="Свернуть к краю">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      <span class="sr-only">Свернуть</span>
+    </button>
+  </header>
+
+  <!-- main view -->
+  <div class="view" id="viewMain">
+    <section class="phrase">
+      <p class="phrase__text" id="phraseText"></p>
+      <div class="phrase__actions">
+        <button class="btn" id="nextBtn" type="button">Следующая</button>
+        <button class="btn btn--ghost" id="editPhrasesBtn" type="button">Список</button>
+      </div>
+    </section>
+
+    <section class="notes">
+      <button class="notes__toggle" id="notesToggle" type="button" aria-expanded="false">
+        <svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg>
+        <span>Заметки</span>
+        <span class="count" id="notesCount">0</span>
+      </button>
+      <div class="notes__body" id="notesBody">
+        <div class="notes__inner">
+          <ul class="note-list" id="noteList"></ul>
+          <p class="empty" id="notesEmpty">Пока пусто.</p>
+          <button class="btn btn--ghost btn--full" id="newNoteBtn" type="button">+ Новая заметка</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- note editor -->
+  <div class="view view--hidden" id="viewNote">
+    <div class="subbar">
+      <button class="icon-btn" id="noteBackBtn" type="button" title="Назад">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 4L6 8l4 4"/></svg>
+        <span class="sr-only">Назад</span>
+      </button>
+      <span class="subbar__title">Заметка</span>
+      <button class="icon-btn icon-btn--danger" id="noteDeleteBtn" type="button" title="Удалить">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5h10M6.5 5V3.5h3V5M5 5l.6 8h4.8L11 5"/></svg>
+        <span class="sr-only">Удалить</span>
+      </button>
+    </div>
+    <input class="input" id="noteTitle" type="text" placeholder="Название" autocomplete="off">
+    <textarea class="textarea" id="noteBody" placeholder="Текст заметки…"></textarea>
+    <p class="hint" id="noteSaved">Сохраняется автоматически</p>
+  </div>
+
+  <!-- phrase list editor -->
+  <div class="view view--hidden" id="viewPhrases">
+    <div class="subbar">
+      <button class="icon-btn" id="phrasesBackBtn" type="button" title="Назад">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 4L6 8l4 4"/></svg>
+        <span class="sr-only">Назад</span>
+      </button>
+      <span class="subbar__title">Список фраз</span>
+      <span class="subbar__spacer"></span>
+    </div>
+    <p class="hint">Одна фраза на строку.</p>
+    <textarea class="textarea textarea--tall" id="phrasesArea" spellcheck="false"></textarea>
+    <div class="row">
+      <button class="btn btn--full" id="phrasesSaveBtn" type="button">Сохранить</button>
+      <button class="btn btn--ghost" id="phrasesResetBtn" type="button">Вернуть базовые</button>
+    </div>
+  </div>
+</div>
+
+<button class="tab" id="tab" type="button" title="Открыть панель">
+  <span class="tab__mark"></span>
+  <span class="sr-only">Открыть панель</span>
+</button>
+
+<script src="app.js"></script>
+</body>
+</html>
