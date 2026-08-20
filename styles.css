@@ -708,3 +708,10 @@ body.is-desktop { background: var(--bg); }
 /* the tab keeps its own size while the window catches up, so nothing ever
    flashes at panel width */
 .is-desktop .tab { transition: opacity .14s var(--ease); }
+
+/* ...and then fills the finished window, whatever size the OS allowed */
+.tab--fill {
+  width: auto;
+  height: auto;
+  transform: none;
+}

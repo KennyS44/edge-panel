@@ -8,6 +8,7 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
+const fsSync = require('node:fs');
 
 const EDGES = ['left', 'right', 'top', 'bottom'];
 const DEFAULT_SIZE = { width: 320, height: 420 };
@@ -40,16 +41,27 @@ async function loadState() {
   return state;
 }
 
+function writeState() {
+  try {
+    fsSync.mkdirSync(path.dirname(statePath()), { recursive: true });
+    fsSync.writeFileSync(statePath(), JSON.stringify(state, null, 2), 'utf8');
+    return true;
+  } catch (err) {
+    console.error('state save failed:', err.message);
+    return false;
+  }
+}
+
 function saveSoon() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => {
-    try {
-      await fs.mkdir(path.dirname(statePath()), { recursive: true });
-      await fs.writeFile(statePath(), JSON.stringify(state, null, 2), 'utf8');
-    } catch (err) {
-      console.error('state save failed:', err.message);
-    }
-  }, 300);
+  saveTimer = setTimeout(writeState, 300);
+}
+
+/* Quitting must not eat the last note: the debounced write above may still be
+   pending, so flush it synchronously on the way out. */
+function flushState() {
+  clearTimeout(saveTimer);
+  return writeState();
 }
 
 /* ---------- geometry ---------- */
@@ -190,7 +202,9 @@ function createWindow() {
     movedTimer = setTimeout(() => {
       if (!win || animation) return;
       const bounds = win.getBounds();
-      if (state.window.magnet) {
+      /* folded always sticks: a tab floating in the middle of the screen is
+         not a thing, whatever the magnet says */
+      if (state.window.magnet || state.window.folded) {
         snapToEdge();
       } else {
         freePos = { x: bounds.x, y: bounds.y };
@@ -254,18 +268,53 @@ async function runSmoke() {
   const after = win.getBounds();
   note('staysPutOnPhraseChange', after.y === before.y && after.x === before.x);
 
+  /* opening the notes has to make room for them */
+  const shut = win.getBounds();
+  await click('notesToggle');
+  await wait(700);
+  const open = win.getBounds();
+  note('notesOpenGrowsWindow', open.height > shut.height + 40);
+
+  /* a note survives quitting: the write must not still be pending */
+  await win.webContents.executeJavaScript(
+    "document.getElementById('newNoteBtn').click()");
+  await wait(200);
+  await win.webContents.executeJavaScript(
+    "const t = document.getElementById('noteTitle');"
+    + "t.value = 'выживает ли заметка';"
+    + "t.dispatchEvent(new Event('input', { bubbles: true }));");
+  await wait(700);
+  flushState();
+  const onDisk = JSON.parse(fsSync.readFileSync(statePath(), 'utf8'));
+  note('noteReachedDisk',
+    Array.isArray(onDisk.notes) && onDisk.notes.some((n) => n.title === 'выживает ли заметка'));
+
+  await win.webContents.executeJavaScript(
+    "document.getElementById('noteBackBtn').click()");
+  await wait(300);
+
   /* with the magnet off nothing may pull it back to an edge */
   await click('magnetBtn');
   await wait(200);
-  win.setBounds({ x: 400, y: 300, width: after.width, height: after.height });
-  await wait(400);
+  const size = win.getBounds();
+  win.setBounds({ x: 400, y: 300, width: size.width, height: size.height });
+  await wait(500);
   for (let i = 0; i < 2; i++) { await click('nextBtn'); await wait(350); }
   const free = win.getBounds();
   note('magnetOffStaysFree', free.x === 400 && free.y === 300);
 
+  /* but folding still docks it, magnet or not */
+  await click('hideBtn');
+  await wait(700);
+  const foldedFree = win.getBounds();
+  note('foldedDocksWithMagnetOff', isFlush(foldedFree, wa, state.window.edge));
+  note('tabFillsWindow', await win.webContents.executeJavaScript(
+    "document.getElementById('tab').classList.contains('tab--fill')"));
+
   const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
   console.log('SMOKE ' + JSON.stringify({
-    edge: state.window.edge, workArea: wa, opened, folded, reopened, free, checks,
+    edge: state.window.edge, workArea: wa,
+    opened, folded, reopened, shut, open, free, foldedFree, checks,
   }));
   console.log(failed.length ? `SMOKE FAILED: ${failed.join(', ')}` : 'SMOKE OK');
 
@@ -325,6 +374,10 @@ ipcMain.on('state:save', (_e, patch) => {
   if (patch.notes !== undefined) state.notes = patch.notes;
   if (patch.ui !== undefined) state.ui = patch.ui;
   saveSoon();
+});
+
+ipcMain.on('window:folded', (_e, folded) => {
+  state.window.folded = Boolean(folded);
 });
 
 ipcMain.on('window:magnet', (_e, on) => {
@@ -389,6 +442,8 @@ if (!app.requestSingleInstanceLock()) {
       console.error('tray unavailable:', err.message);
     }
   });
+
+  app.on('before-quit', flushState);
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();

@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('edge', {
   load: () => ipcRenderer.invoke('state:load'),
   save: (patch) => ipcRenderer.send('state:save', patch),
   setMagnet: (on) => ipcRenderer.send('window:magnet', on),
+  setFolded: (folded) => ipcRenderer.send('window:folded', folded),
   setSize: (width, height, opts = {}) =>
     ipcRenderer.send('window:size', { width, height, ...opts }),
   autostart: (value) => ipcRenderer.invoke('app:autostart', value),

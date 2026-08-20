@@ -13,9 +13,11 @@ const DESKTOP = HOST !== null;
 
 const SLICE = { [STORE.phrases]: 'phrases', [STORE.notes]: 'notes', [STORE.ui]: 'ui' };
 
-/* the collapsed window is exactly the tab */
-const TAB_LONG = 72;
-const TAB_SHORT = 14;
+/* The collapsed window. Windows will not shrink a window down to a 14px strip,
+   so asking for one left a dead rectangle around the tab; this is both a size
+   the OS grants and a target that is comfortable to hit. */
+const TAB_LONG = 110;
+const TAB_SHORT = 26;
 
 const DEFAULT_PHRASES = [
   'Сделал руками дважды — на третий раз automate it.',
@@ -453,8 +455,13 @@ function reportSize({ snap = ui.magnet, restore = false, centre = false, animate
       { snap: true, centre, animate });
     return;
   }
-  const box = panel.querySelector('.panel__content').getBoundingClientRect();
-  HOST.setSize(Math.ceil(box.width), Math.ceil(box.height), { snap, restore, centre, animate });
+  /* scrollHeight, not the rendered height: if anything clamps the content to
+     the current window, the rendered height can never exceed it and the window
+     could never grow again — the notes section could not open */
+  const content = panel.querySelector('.panel__content');
+  const box = content.getBoundingClientRect();
+  const height = Math.max(Math.ceil(box.height), content.scrollHeight);
+  HOST.setSize(Math.ceil(box.width), height, { snap, restore, centre, animate });
 }
 
 /* Anchors the panel to its edge, so folding collapses into that edge. */
@@ -614,6 +621,22 @@ function placeTab() {
   else tab.style.left = `${rect.left + rect.width / 2}px`;
 }
 
+/* The OS decides the final size of a tiny window, so rather than guess it the
+   tab simply takes whatever the window turned out to be. */
+function fillTab() {
+  tab.classList.add('tab--fill');
+  tab.style.left = '0px';
+  tab.style.right = '0px';
+  tab.style.top = '0px';
+  tab.style.bottom = '0px';
+}
+
+function unfillTab() {
+  clearTimeout(foldTimer);
+  tab.classList.remove('tab--fill');
+  placeTab();
+}
+
 function collapseNow() {
   placeTab();
   /* on the desktop the shrinking window does the folding; the panel only has
@@ -635,10 +658,15 @@ function setHidden(hidden) {
   if (DESKTOP) {
     /* the window and the panel move together: no bare rectangle is ever left
        standing while one waits for the other */
+    HOST.setFolded(hidden);
     if (hidden) {
       collapseNow();
       reportSize({ snap: true, centre: true, animate: true });
+      /* once the window is down to tab size, the tab takes the whole of it —
+         no dead border to miss with the mouse */
+      foldTimer = setTimeout(fillTab, 240);
     } else {
+      unfillTab();
       expandNow();
       reportSize({ snap: ui.magnet, restore: !ui.magnet, centre: true, animate: true });
     }
