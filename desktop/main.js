@@ -180,6 +180,14 @@ function setRevealed(on) {
   animateBounds(iconBounds(!on), 140);
 }
 
+/* the corner you brush to call the icon back out */
+function nearCorner(point) {
+  const wa = (parkDisplay || screen.getPrimaryDisplay()).workArea;
+  return point.x <= wa.x + SENSOR.width
+    && point.y >= wa.y
+    && point.y <= wa.y + SENSOR.height;
+}
+
 /* The icon lives mostly off screen, so it cannot receive a mouse-over of its
    own — the cursor is watched instead, and only while folded. */
 function watchCursor(on) {
@@ -189,12 +197,7 @@ function watchCursor(on) {
 
   cursorTimer = setInterval(() => {
     if (!win || win.isDestroyed()) return;
-    const wa = (parkDisplay || screen.getPrimaryDisplay()).workArea;
-    const p = screen.getCursorScreenPoint();
-    const near = p.x <= wa.x + SENSOR.width
-      && p.y >= wa.y
-      && p.y <= wa.y + SENSOR.height;
-    setRevealed(near);
+    setRevealed(nearCorner(screen.getCursorScreenPoint()));
   }, CURSOR_MS);
 }
 
@@ -327,13 +330,20 @@ async function runSmoke() {
   note('parkedPastCorner', folded.x === wa.x - (ICON - PEEK));
   note('parkedAtTop', folded.y === wa.y + 8);
 
-  /* the cursor cannot be moved from here, so the reveal is driven directly */
+  /* the corner test itself, which is what the watcher runs on every tick */
+  note('cornerZoneCatchesTheEdge', nearCorner({ x: wa.x + 5, y: wa.y + 20 }));
+  note('cornerZoneIgnoresTheRest', !nearCorner({ x: wa.x + 300, y: wa.y + 400 }));
+
+  /* the cursor cannot be moved in here, so the slide is driven directly —
+     with the watcher paused, or it would tuck the icon straight back in */
+  watchCursor(false);
   setRevealed(true);
   await wait(400);
   note('revealSlidesOut', win.getBounds().x === wa.x);
   setRevealed(false);
   await wait(400);
   note('hidesAgainWhenCursorLeaves', win.getBounds().x === wa.x - (ICON - PEEK));
+  watchCursor(true);
 
   await click('tab');
   await wait(900);
