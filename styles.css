@@ -8,9 +8,9 @@
   --surface:   #131519;
   --surface-2: #1b1e24;
   --line:      #2a2f38;
-  --text:      #e8eaed;   /* 15.9:1 on --bg */
-  --muted:     #98a0ab;   /*  7.9:1 on --bg */
-  --accent:    #fcee0a;   /* 16.5:1 on --bg */
+  --text:      #d8dbe0;   /* 13.9:1 on --bg */
+  --muted:     #949ba6;   /*  7.1:1 on --bg */
+  --accent:    #ecdf12;   /* 14.1:1 on --bg */
   --accent-2:  #00e5ff;
   --danger:    #ff4d6a;
   --ink:       #0b0c0e;   /* text on top of --accent */
@@ -162,7 +162,7 @@ body {
   flex: none;
   padding: 8px 8px 8px 12px;
   background: var(--surface);
-  border-bottom: 1px solid rgba(252, 238, 10, .25);
+  border-bottom: 1px solid rgba(236, 223, 18, .25);
   cursor: grab;
   user-select: none;
   -webkit-user-select: none;
@@ -259,24 +259,37 @@ body {
   font-size: 14px;
   letter-spacing: .04em;
   text-transform: uppercase;
+  font-weight: 600;
   color: var(--text);
   background: var(--surface-2);
   border: 0;
   cursor: pointer;
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--cut)),
                      calc(100% - var(--cut)) 100%, 0 100%);
-  transition: background .16s var(--ease), color .16s var(--ease);
+  /* a thin rail so the label never reads as loose text */
+  box-shadow: inset 0 0 0 1px rgba(236, 223, 18, .3);
+  transition: background .16s var(--ease), color .16s var(--ease),
+              box-shadow .16s var(--ease);
 }
 
-.btn:hover { background: var(--accent); color: var(--ink); }
-.btn:active { background: #d9cd09; }
+.btn:hover {
+  background: var(--accent);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.btn:active { background: #d4c810; }
 .btn:disabled { opacity: .45; cursor: default; }
-.btn:disabled:hover { background: var(--surface-2); color: var(--text); }
+
+.btn:disabled:hover {
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px rgba(236, 223, 18, .3);
+}
 
 .btn--ghost {
   flex: none;
   background: transparent;
-  color: var(--muted);
 }
 
 .btn--full { flex: none; width: 100%; }
@@ -308,10 +321,17 @@ body {
   stroke-linejoin: round;
 }
 
+/* solid shapes read better than strokes at 16px — used by the magnet */
+.icon-btn svg.icon-fill {
+  fill: currentColor;
+  stroke: none;
+}
+
 /* magnet: lit when the panel snaps to edges */
+.magnet-btn svg { width: 18px; height: 18px; }
 .magnet-btn.is-on { color: var(--accent); }
-.magnet-btn:not(.is-on) { color: var(--line); }
-.magnet-btn:not(.is-on):hover { color: var(--ink); }
+.magnet-btn:not(.is-on) { color: #5c6472; }   /* off, but still visibly there */
+.magnet-btn:hover { color: var(--ink); }   /* stays readable on the yellow fill */
 
 /* the arrow points at the edge the panel will fold into */
 .hide-btn svg { transition: transform .2s var(--ease); }
@@ -604,7 +624,7 @@ body {
   pointer-events: auto;
 }
 
-.tab:hover { background: #fff45a; }
+.tab:hover { background: #f6ea45; }
 
 .tab--x { width: 14px; height: 72px; transform: translateY(-50%); }
 .tab--y { width: 72px; height: 14px; transform: translateX(-50%); }

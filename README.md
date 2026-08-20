@@ -42,7 +42,7 @@ without reminding myself to?
 
 ## Look
 
-The menus of Cyberpunk 2077: near-black, acid yellow, chamfered corners, a
+The menus of Cyberpunk 2077: near-black, soft acid yellow, chamfered corners, a
 technical mono for labels and a plain sans for anything you actually read.
 Faint scanlines over the panel. One style across every screen — a widget this
 small cannot carry two.
