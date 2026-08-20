@@ -26,9 +26,7 @@ without reminding myself to?
 - **Snaps to the nearest screen edge** when you let go of it — left, right, top
   or bottom.
 - **A magnet switch** in the title bar. Turn it off and an open panel stays
-  wherever you drop it; folding still pulls it to the nearest edge, because
-  that is the only place a tab makes sense, and unfolding brings it back to
-  the spot you chose.
+  wherever you drop it; unfolding brings it back to the spot you chose.
 - **Folds into an app icon** parked past the top-left corner of the screen, with
   a hairline left showing so it covers none of the desktop icons. Brush that
   corner with the cursor and it slides out; move away and it tucks back in.
@@ -46,8 +44,7 @@ On the desktop it also:
 
 - **Starts with the system** and lives in the tray: show, hide, quit, and a
   switch for launching at login.
-- **Floats above other windows** in a frameless, transparent window with no
-  taskbar entry.
+- **Floats above other windows** in a frameless window with no taskbar entry.
 - **Respects the taskbar.** Snapping measures the display's work area, so the
   panel sits beside the taskbar, not under it.
 - **Handles several monitors.** The edge is computed on whichever display the
@@ -57,9 +54,8 @@ On the desktop it also:
 ## Look
 
 The menus of Cyberpunk 2077: near-black, soft acid yellow, chamfered corners, a
-technical mono for labels and a plain sans for anything you actually read.
-Faint scanlines over the panel. One style across every screen — a widget this
-small cannot carry two.
+technical mono for labels and a plain sans for anything you actually read. One
+style across every screen — a widget this small cannot carry two.
 
 ## Stack
 
