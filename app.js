@@ -530,8 +530,8 @@ let drag = null;
 let snapTimer = null;
 
 bar.addEventListener('pointerdown', (e) => {
-  if (DESKTOP) return;   /* the OS drags the window by the title bar */
-  if (e.target.closest('button')) return;
+  if (DESKTOP) return;   /* the OS drags the window by the grip */
+  if (!e.target.closest('.bar__grip')) return;
   clearTimeout(snapTimer);
   const rect = panel.getBoundingClientRect();
   /* switch to free left/top positioning for the duration of the drag */
@@ -640,15 +640,24 @@ function armSensor(on) {
   edgeSensor.classList.toggle('is-armed', on);
 }
 
+/* Look first, state second — in both directions. The panel is never on screen
+   while the window is icon-sized, and the icon is never on screen while the
+   window is panel-sized. */
 function collapseNow() {
   armSensor(true);
   panel.classList.add(DESKTOP ? 'panel--gone' : 'panel--collapsed');
   tab.classList.add('is-visible');
 }
 
+/* ...and then it leaves the document, so a folded window holds nothing but the
+   icon: no stray drag region, nothing to click through */
+function stowPanel() {
+  if (DESKTOP) panel.classList.add('panel--away');
+}
+
 function expandNow() {
   armSensor(false);
-  panel.classList.remove('panel--collapsed', 'panel--gone');
+  panel.classList.remove('panel--collapsed', 'panel--gone', 'panel--away');
   tab.classList.remove('is-visible');
 }
 
@@ -661,15 +670,14 @@ function setHidden(hidden) {
     /* the window and the panel move together: no bare rectangle is ever left
        standing while one waits for the other */
     if (hidden) {
-      /* fade the panel out first, then let the shell shrink the window to an
-         icon and walk it off the corner */
+      /* icon first, geometry second */
       collapseNow();
-      foldTimer = setTimeout(() => HOST.fold(true), 140);
+      foldTimer = setTimeout(() => { stowPanel(); HOST.fold(true); }, 140);
     } else {
-      /* the other way round: room first, contents second */
+      /* room first, panel second — it appears only once the window fits it */
       clearTimeout(foldTimer);
       HOST.fold(false);
-      foldTimer = setTimeout(expandNow, 180);
+      foldTimer = setTimeout(expandNow, 240);
     }
     save(STORE.ui, ui);
     return;
@@ -778,6 +786,7 @@ async function start() {
   applyPlacement();
   if (ui.hidden) {
     collapseNow();
+    stowPanel();
     /* started up already folded: the shell has to park the window too */
     if (DESKTOP) HOST.fold(true);
   }

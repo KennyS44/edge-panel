@@ -323,6 +323,14 @@ async function runSmoke() {
   note('quitButtonPresent', await win.webContents.executeJavaScript(
     "getComputedStyle(document.getElementById('quitBtn')).display !== 'none'"));
 
+  /* open: the grip is the handle, and the icon is not in the document at all,
+     so it cannot cancel the drag region the way it used to */
+  const regionOpen = await win.webContents.executeJavaScript(
+    "getComputedStyle(document.querySelector('.bar__grip')).getPropertyValue('-webkit-app-region')");
+  note('gripDragsWhenOpen', regionOpen === 'drag');
+  note('iconOutOfTheWayWhenOpen', await win.webContents.executeJavaScript(
+    "getComputedStyle(document.getElementById('tab')).display === 'none'"));
+
   /* folding: down to an app icon, parked past the top-left corner */
   await click('hideBtn');
   await wait(900);
@@ -336,8 +344,10 @@ async function runSmoke() {
   note('iconTakesTheClick', await win.webContents.executeJavaScript(
     "document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2)"
     + ".closest('#tab') !== null"));
-  note('nothingDragsWhileFolded', await win.webContents.executeJavaScript(
-    "getComputedStyle(document.getElementById('bar')).getPropertyValue('-webkit-app-region') !== 'drag'"));
+  /* folded: the panel is gone from the document, so nothing of it — drag
+     region included — can reach the icon */
+  note('panelOutOfTheWayWhenFolded', await win.webContents.executeJavaScript(
+    "getComputedStyle(document.getElementById('panel')).display === 'none'"));
 
   /* the corner test itself, which is what the watcher runs on every tick */
   note('cornerZoneCatchesTheEdge', nearCorner({ x: wa.x + wa.width - 5, y: wa.y + 20 }));
@@ -461,7 +471,7 @@ async function runSmoke() {
 
   const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
   console.log('SMOKE ' + JSON.stringify({
-    edge: state.window.edge, workArea: wa,
+    edge: state.window.edge, workArea: wa, regionOpen,
     opened, folded, reopened, shut, open, free, foldedFree,
     heights: { onMain, onPhrases, backToMain, emptyList, fullList: fullList.height },
     mainProbe, phrasesProbe,

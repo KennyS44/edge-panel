@@ -185,20 +185,43 @@ body {
   padding: 8px 8px 8px 12px;
   background: var(--surface);
   border-bottom: 1px solid rgba(236, 223, 18, .25);
-  cursor: grab;
   user-select: none;
   -webkit-user-select: none;
 }
 
-.bar:active { cursor: grabbing; }
-
+/* the only thing that drags the panel: three lines in the corner */
 .bar__grip {
-  width: 20px;
-  height: 8px;
-  border-top: 2px solid var(--line);
-  border-bottom: 2px solid var(--line);
+  position: relative;
+  width: 32px;
+  height: 32px;
   flex: none;
+  cursor: grab;
+  background-image: linear-gradient(var(--muted), var(--muted));
+  background-size: 18px 2px;
+  background-position: center;
+  background-repeat: no-repeat;
+  transition: background-image .16s var(--ease);
 }
+
+.bar__grip::before,
+.bar__grip::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  width: 18px;
+  height: 2px;
+  background: var(--muted);
+  transition: background .16s var(--ease);
+}
+
+.bar__grip::before { top: 9px; }
+.bar__grip::after { bottom: 9px; }
+
+.bar__grip:hover { background-image: linear-gradient(var(--accent), var(--accent)); }
+.bar__grip:hover::before,
+.bar__grip:hover::after { background: var(--accent); }
+
+.bar__grip:active { cursor: grabbing; }
 
 .bar__title {
   flex: 1;
@@ -737,15 +760,24 @@ body.is-desktop { background: var(--bg); }
 .is-desktop .textarea,
 .is-desktop .phrase-rows { max-height: 320px; }
 
-/* the title bar is the drag handle the window manager knows about */
-.is-desktop .bar { -webkit-app-region: drag; }
+/* Only the grip drags the window. Marking the whole bar meant the folded
+   window — which is nothing but bar — swallowed every click; marking the icon
+   as no-drag to compensate then cancelled dragging in both states, because
+   the icon covers the window whether or not it is shown. One handle, and a
+   folded panel that is not in the document at all, settles both. */
+.is-desktop .bar__grip { -webkit-app-region: drag; }
 .is-desktop .bar button { -webkit-app-region: no-drag; }
 
 /* The shell parks and reveals the real window, so the icon never moves by
    itself here — it just fills whatever the window turned out to be. */
 .is-desktop .edge-sensor { display: none; }
 
-.is-desktop .tab {
+/* Folded and unfolded are two different objects here: whichever is not in use
+   leaves the document entirely, so neither can affect the other. */
+.is-desktop .tab { display: none; }
+
+.is-desktop .tab.is-visible {
+  display: grid;
   inset: 0;
   width: auto;
   height: auto;
@@ -754,8 +786,4 @@ body.is-desktop { background: var(--bg); }
   -webkit-app-region: no-drag;
 }
 
-/* A drag region swallows clicks whether or not anything is drawn there, and a
-   folded window is all title bar — which is why the icon could not be clicked.
-   Folded, nothing drags. */
-.is-desktop .panel--gone,
-.is-desktop .panel--gone .bar { -webkit-app-region: no-drag; }
+.is-desktop .panel--away { display: none; }
