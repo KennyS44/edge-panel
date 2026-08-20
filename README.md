@@ -27,9 +27,9 @@ without reminding myself to?
   or bottom.
 - **A magnet switch** in the title bar. Turn it off and an open panel stays
   wherever you drop it; unfolding brings it back to the spot you chose.
-- **Folds into an app icon** parked past the top-left corner of the screen, with
-  a hairline left showing so it covers none of the desktop icons. Brush that
-  corner with the cursor and it slides out; move away and it tucks back in.
+- **Folds into an app icon** parked past the top-right corner of the screen,
+  with a hairline left showing so it covers nothing. Brush that corner with the
+  cursor and it slides out, ready to click; move away and it tucks back in.
 - **Random phrase** on start, a button for the next one, and a slow auto-change
   every 15 minutes.
 - **Editable phrase list**: one block per phrase, each growing to fit its text,
