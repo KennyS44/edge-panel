@@ -15,4 +15,5 @@ contextBridge.exposeInMainWorld('edge', {
   autostart: (value) => ipcRenderer.invoke('app:autostart', value),
   quit: () => ipcRenderer.send('app:quit'),
   onEdge: (cb) => ipcRenderer.on('edge', (_e, edge) => cb(edge)),
+  onFlush: (cb) => ipcRenderer.on('flush', () => cb()),
 });

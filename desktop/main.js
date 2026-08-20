@@ -625,7 +625,22 @@ if (!app.requestSingleInstanceLock()) {
     }
   });
 
-  app.on('before-quit', flushState);
+  /* The renderer debounces its own writes, so quitting straight after typing
+     would leave the last keystrokes with it. Give it a moment to hand them
+     over, then go. */
+  let asked = false;
+  app.on('before-quit', (e) => {
+    if (!asked && win && !win.isDestroyed()) {
+      e.preventDefault();
+      asked = true;
+      win.webContents.send('flush');
+      setTimeout(() => app.quit(), 150);
+      return;
+    }
+    flushState();
+  });
+
+  app.on('session-end', flushState);   /* Windows logging off or shutting down */
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();

@@ -343,6 +343,16 @@ function touchOpenNote() {
   }, 400);
 }
 
+/* Everything pending, written now. Editing a note only debounces the write —
+   the note itself is already up to date in memory — so this loses nothing. */
+function flushPending() {
+  clearTimeout(saveTimer);
+  clearTimeout(phrasesSaveTimer);
+  save(STORE.notes, notes);
+  save(STORE.phrases, phrases);
+  save(STORE.ui, ui);
+}
+
 function closeNote() {
   clearTimeout(saveTimer);
   const note = notes.find((n) => n.id === openNoteId);
@@ -712,7 +722,13 @@ function setHidden(hidden) {
 nextBtn.addEventListener('click', () => renderPhrase());
 magnetBtn.addEventListener('click', () => setMagnet(!ui.magnet));
 $('hideBtn').addEventListener('click', () => setHidden(true));
-$('quitBtn').addEventListener('click', () => { if (DESKTOP) HOST.quit(); });
+$('quitBtn').addEventListener('click', () => {
+  if (!DESKTOP) return;
+  /* the save goes first: messages arrive in the order they are sent, so it
+     lands before the quit does */
+  flushPending();
+  HOST.quit();
+});
 tab.addEventListener('click', () => setHidden(false));
 
 notesToggle.addEventListener('click', () => setNotesOpen(!ui.notesOpen));
@@ -740,6 +756,11 @@ $('addPhraseBtn').addEventListener('click', () => {
   save(STORE.phrases, phrases);
   renderPhraseRows(phrases.length - 1);
 });
+
+/* quit from the tray, Alt+F4, or the machine shutting down: the shell asks
+   before it goes */
+if (DESKTOP) HOST.onFlush(flushPending);
+window.addEventListener('pagehide', flushPending);
 
 document.addEventListener('click', (e) => {
   if (confirmingRow && !e.target.closest('.note-del')) clearConfirm();
