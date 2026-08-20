@@ -465,9 +465,11 @@ function desiredHeight() {
      measurement and goes back on before anything is painted. */
   const content = panel.querySelector('.panel__content');
   const capped = content.style.maxHeight;
+  measuring = true;                    /* our own style change is not news */
   content.style.maxHeight = 'none';
   const wanted = bar.offsetHeight + view.scrollHeight;
   content.style.maxHeight = capped;
+  measuring = false;
 
   return Math.ceil(wanted);
 }
@@ -475,11 +477,17 @@ function desiredHeight() {
 /* Every change of content — a view opening, a note added, a phrase wrapping
    onto another line — reports a new size, collapsed into one frame. */
 let sizeFrame = 0;
+let measuring = false;
+let lastSent = '';
 
 function scheduleSize() {
-  if (!DESKTOP || ui.hidden) return;
+  if (!DESKTOP || ui.hidden || measuring) return;
   cancelAnimationFrame(sizeFrame);
-  sizeFrame = requestAnimationFrame(() => reportSize());
+  sizeFrame = requestAnimationFrame(() => {
+    /* re-checked here, not only when scheduling: a frame queued a moment
+       before a fold would otherwise land afterwards and undo it */
+    if (!ui.hidden) reportSize();
+  });
 }
 
 /* Tells the shell how much room the panel needs right now. Folding is the only
@@ -487,13 +495,17 @@ function scheduleSize() {
    window around. */
 function reportSize({ snap = ui.magnet, restore = false, centre = false, animate = false } = {}) {
   if (!DESKTOP) return;
-  if (ui.hidden) {
-    const across = isX(ui.edge);
-    HOST.setSize(across ? TAB_SHORT : TAB_LONG, across ? TAB_LONG : TAB_SHORT,
-      { snap: true, centre, animate });
-    return;
-  }
-  HOST.setSize(PANEL_WIDTH, desiredHeight(), { snap, restore, centre, animate });
+  const across = isX(ui.edge);
+  const width = ui.hidden ? (across ? TAB_SHORT : TAB_LONG) : PANEL_WIDTH;
+  const height = ui.hidden ? (across ? TAB_LONG : TAB_SHORT) : desiredHeight();
+
+  /* nothing new to say: repeating it would keep the window resizing itself
+     for no reason */
+  const said = `${width}x${height}:${snap}${restore}`;
+  if (said === lastSent && !centre && !animate) return;
+  lastSent = said;
+
+  HOST.setSize(width, height, { snap: ui.hidden || snap, restore, centre, animate });
 }
 
 /* Anchors the panel to its edge, so folding collapses into that edge. */
