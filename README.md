@@ -23,6 +23,10 @@ without reminding myself to?
 - **Draggable panel.** Move it by the title bar; the position is remembered.
 - **Snaps to the nearest screen edge** when you let go of it — left, right, top
   or bottom.
+- **A magnet switch** in the title bar. Turn it off and an open panel stays
+  wherever you drop it; folding still pulls it to the nearest edge, because
+  that is the only place a tab makes sense, and unfolding brings it back to
+  the spot you chose.
 - **Folds into that edge**, leaving nothing but a small tab; one click brings it
   back. The fold runs sideways or up and down, whichever the edge calls for.
 - **Random phrase** on start, a button for the next one, and a slow auto-change
@@ -35,6 +39,13 @@ without reminding myself to?
 - **Fixed footprint.** The note list, the note text and the phrase list scroll
   inside the panel, so it does not grow with the amount of content.
 - Everything is kept in `localStorage` and survives a reload.
+
+## Look
+
+The menus of Cyberpunk 2077: near-black, acid yellow, chamfered corners, a
+technical mono for labels and a plain sans for anything you actually read.
+Faint scanlines over the panel. One style across every screen — a widget this
+small cannot carry two.
 
 ## Stack
 
@@ -54,7 +65,11 @@ Plain HTML, CSS and JavaScript. No build step, no dependencies — `index.html`,
 5. Tray icon: show, hide, quit.
 6. Move storage from `localStorage` to a file in `userData`, so notes do not
    depend on the browser cache.
-7. Build an installer.
+7. **Pictures inside notes** — paste or drop an image into a note. This waits
+   for step 6 on purpose: images belong on disk next to the notes file, not
+   base64-encoded into `localStorage`, which would fill its few megabytes in a
+   handful of screenshots.
+8. Build an installer.
 
 ## Deliberately out of scope
 

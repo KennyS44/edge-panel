@@ -54,6 +54,8 @@ if (!Array.isArray(notes)) notes = [];
 const EDGES = ['left', 'right', 'top', 'bottom'];
 if (!EDGES.includes(ui.edge)) ui.edge = 'right';
 if (typeof ui.offset !== 'number') ui.offset = 24;
+if (ui.magnet === undefined) ui.magnet = true;
+if (!ui.free || typeof ui.free.left !== 'number') ui.free = null;
 ui.notesOpen = Boolean(ui.notesOpen);
 ui.hidden = Boolean(ui.hidden);
 
@@ -76,6 +78,7 @@ const noteTitle = $('noteTitle');
 const noteBody = $('noteBody');
 const phraseRows = $('phraseRows');
 const phrasesCount = $('phrasesCount');
+const magnetBtn = $('magnetBtn');
 
 let openNoteId = null;
 let lastPhrase = '';
@@ -216,7 +219,7 @@ function renderNotes() {
   noteList.textContent = '';
   const sorted = [...notes].sort((a, b) => b.updated - a.updated);
 
-  for (const note of sorted) {
+  sorted.forEach((note, i) => {
     const li = document.createElement('li');
     const row = document.createElement('div');
     row.className = 'note-row';
@@ -224,6 +227,13 @@ function renderNotes() {
     const open = document.createElement('button');
     open.type = 'button';
     open.className = 'note-item';
+
+    const idx = document.createElement('span');
+    idx.className = 'note-item__idx';
+    idx.textContent = String(i + 1).padStart(2, '0');
+
+    const main = document.createElement('span');
+    main.className = 'note-item__main';
 
     const title = document.createElement('span');
     title.className = 'note-item__title';
@@ -233,7 +243,8 @@ function renderNotes() {
     date.className = 'note-item__date';
     date.textContent = formatDate(note.updated);
 
-    open.append(title, date);
+    main.append(title, date);
+    open.append(idx, main);
     open.addEventListener('click', () => openNote(note.id));
 
     /* delete straight from the list, with one confirming tap */
@@ -261,7 +272,7 @@ function renderNotes() {
     row.append(open, del);
     li.append(row);
     noteList.append(li);
-  }
+  });
 
   notesCount.textContent = String(notes.length);
   notesEmpty.hidden = notes.length > 0;
@@ -328,10 +339,78 @@ function closeNote() {
   showView('main');
 }
 
-/* ---------- position: always stuck to one edge ---------- */
+/* ---------- position ---------- */
+
+/* With the magnet on, the panel sticks to the nearest edge. With it off, an
+   open panel stays wherever it was dropped — but folding still pulls it to
+   the nearest edge, because that is the only place a tab makes sense. */
 
 const isX = (edge) => edge === 'left' || edge === 'right';
 const clamp = (v, min, max) => Math.min(Math.max(v, min), Math.max(min, max));
+
+const isFree = () => !ui.magnet && ui.free !== null;
+
+/* Switches to plain left/top positioning without moving the panel. */
+function freezeToLeftTop() {
+  const rect = panel.getBoundingClientRect();
+  panel.style.right = 'auto';
+  panel.style.bottom = 'auto';
+  panel.style.left = `${rect.left}px`;
+  panel.style.top = `${rect.top}px`;
+  return rect;
+}
+
+function nearestEdge(rect) {
+  const gap = {
+    left: rect.left,
+    right: window.innerWidth - rect.right,
+    top: rect.top,
+    bottom: window.innerHeight - rect.bottom,
+  };
+  return EDGES.reduce((a, b) => (gap[b] < gap[a] ? b : a));
+}
+
+/* Moves the panel flush against the closest edge; keeps left/top anchoring so
+   the move animates. anchorPanel() takes over once it has arrived. */
+function glideToEdge(rect) {
+  const edge = nearestEdge(rect);
+  const left = edge === 'left' ? 0
+    : edge === 'right' ? window.innerWidth - rect.width : rect.left;
+  const top = edge === 'top' ? 0
+    : edge === 'bottom' ? window.innerHeight - rect.height : rect.top;
+  panel.style.left = `${left}px`;
+  panel.style.top = `${top}px`;
+  ui.edge = edge;
+  ui.offset = isX(edge) ? top : left;
+  panel.dataset.edge = edge;
+  panel.dataset.axis = isX(edge) ? 'x' : 'y';
+  return edge;
+}
+
+function placeFree(left, top) {
+  const w = panel.offsetWidth;
+  const h = panel.offsetHeight;
+  ui.free = {
+    left: clamp(left, 0, window.innerWidth - w),
+    top: clamp(top, 0, window.innerHeight - h),
+  };
+  panel.style.right = 'auto';
+  panel.style.bottom = 'auto';
+  panel.style.left = `${ui.free.left}px`;
+  panel.style.top = `${ui.free.top}px`;
+}
+
+function applyPlacement() {
+  panel.classList.toggle('panel--free', isFree() && !ui.hidden);
+  if (isFree() && !ui.hidden) {
+    /* keep the fold direction pointing at the edge it will collapse into */
+    panel.dataset.edge = ui.edge;
+    panel.dataset.axis = isX(ui.edge) ? 'x' : 'y';
+    placeFree(ui.free.left, ui.free.top);
+  } else {
+    anchorPanel();
+  }
+}
 
 /* Anchors the panel to its edge, so folding collapses into that edge. */
 function anchorPanel() {
@@ -375,50 +454,80 @@ bar.addEventListener('pointermove', (e) => {
   const h = panel.offsetHeight;
   panel.style.left = `${clamp(e.clientX - drag.dx, 0, window.innerWidth - w)}px`;
   panel.style.top = `${clamp(e.clientY - drag.dy, 0, window.innerHeight - h)}px`;
+
+  /* the fold arrow follows the closest edge while you move */
+  const edge = nearestEdge(panel.getBoundingClientRect());
+  panel.dataset.edge = edge;
+  panel.dataset.axis = isX(edge) ? 'x' : 'y';
 });
 
 function endDrag(e) {
   if (!drag) return;
   drag = null;
   if (bar.hasPointerCapture(e.pointerId)) bar.releasePointerCapture(e.pointerId);
+  panel.classList.remove('panel--dragging');
 
   const rect = panel.getBoundingClientRect();
-  const gap = {
-    left: rect.left,
-    right: window.innerWidth - rect.right,
-    top: rect.top,
-    bottom: window.innerHeight - rect.bottom,
-  };
-  const edge = EDGES.reduce((a, b) => (gap[b] < gap[a] ? b : a));
 
-  /* glide to the edge, then hand over to edge anchoring */
-  panel.classList.remove('panel--dragging');
-  const left = edge === 'left' ? 0
-    : edge === 'right' ? window.innerWidth - rect.width : rect.left;
-  const top = edge === 'top' ? 0
-    : edge === 'bottom' ? window.innerHeight - rect.height : rect.top;
-  panel.style.left = `${left}px`;
-  panel.style.top = `${top}px`;
+  if (ui.magnet) {
+    ui.free = null;
+    panel.classList.remove('panel--free');
+    glideToEdge(rect);
+    snapTimer = setTimeout(anchorPanel, SNAP_MS);
+  } else {
+    ui.free = { left: rect.left, top: rect.top };
+    ui.edge = nearestEdge(rect);
+    panel.classList.add('panel--free');
+  }
 
-  ui.edge = edge;
-  ui.offset = isX(edge) ? top : left;
   save(STORE.ui, ui);
-  snapTimer = setTimeout(anchorPanel, SNAP_MS);
 }
 
 bar.addEventListener('pointerup', endDrag);
 bar.addEventListener('pointercancel', endDrag);
 
 window.addEventListener('resize', () => {
-  if (!drag) anchorPanel();
-  if (ui.hidden) placeTab();
+  if (drag) return;
+  if (ui.hidden) { anchorPanel(); placeTab(); }
+  else applyPlacement();
   if (!views.phrases.classList.contains('view--hidden')) growAll();
 });
 
+/* ---------- magnet ---------- */
+
+function setMagnet(on) {
+  ui.magnet = on;
+  magnetBtn.classList.toggle('is-on', on);
+  magnetBtn.setAttribute('aria-pressed', String(on));
+  magnetBtn.title = on
+    ? 'Магнит: панель липнет к краю'
+    : 'Магнит выключен: панель стоит где угодно';
+
+  if (on) {
+    ui.free = null;
+    panel.classList.remove('panel--free');
+    if (!ui.hidden) {
+      const rect = freezeToLeftTop();
+      glideToEdge(rect);
+      clearTimeout(snapTimer);
+      snapTimer = setTimeout(anchorPanel, SNAP_MS);
+    }
+  } else if (!ui.hidden) {
+    const rect = freezeToLeftTop();
+    ui.free = { left: rect.left, top: rect.top };
+    panel.classList.add('panel--free');
+  }
+
+  save(STORE.ui, ui);
+}
+
 /* ---------- fold / unfold ---------- */
+
+let foldTimer = null;
 
 function placeTab() {
   const rect = panel.getBoundingClientRect();
+  tab.dataset.edge = ui.edge;
   tab.classList.toggle('tab--x', isX(ui.edge));
   tab.classList.toggle('tab--y', !isX(ui.edge));
   tab.style.left = 'auto';
@@ -430,17 +539,47 @@ function placeTab() {
   else tab.style.left = `${rect.left + rect.width / 2}px`;
 }
 
+function collapseNow() {
+  placeTab();
+  panel.classList.add('panel--collapsed');
+  tab.classList.add('is-visible');
+}
+
 function setHidden(hidden) {
   ui.hidden = hidden;
-  if (hidden) placeTab();
-  panel.classList.toggle('panel--collapsed', hidden);
-  tab.classList.toggle('is-visible', hidden);
+  clearTimeout(foldTimer);
+  clearTimeout(snapTimer);
+
+  if (hidden) {
+    panel.classList.remove('panel--free');
+    if (isFree()) {
+      /* a free panel travels to the nearest edge first, then folds into it */
+      const rect = freezeToLeftTop();
+      glideToEdge(rect);
+      foldTimer = setTimeout(() => { anchorPanel(); collapseNow(); }, SNAP_MS);
+    } else {
+      collapseNow();
+    }
+  } else if (isFree()) {
+    /* unfold and travel back to where it was left, in one motion */
+    freezeToLeftTop();
+    void panel.offsetWidth;
+    panel.classList.remove('panel--collapsed');
+    panel.classList.add('panel--free');
+    tab.classList.remove('is-visible');
+    requestAnimationFrame(() => placeFree(ui.free.left, ui.free.top));
+  } else {
+    panel.classList.remove('panel--collapsed');
+    tab.classList.remove('is-visible');
+  }
+
   save(STORE.ui, ui);
 }
 
 /* ---------- wiring ---------- */
 
 nextBtn.addEventListener('click', () => renderPhrase());
+magnetBtn.addEventListener('click', () => setMagnet(!ui.magnet));
 $('hideBtn').addEventListener('click', () => setHidden(true));
 tab.addEventListener('click', () => setHidden(false));
 
@@ -486,6 +625,10 @@ document.addEventListener('keydown', (e) => {
 renderNotes();
 renderPhrase(false);
 setNotesOpen(ui.notesOpen);
-anchorPanel();
-setHidden(ui.hidden);
+
+magnetBtn.classList.toggle('is-on', ui.magnet);
+magnetBtn.setAttribute('aria-pressed', String(ui.magnet));
+applyPlacement();
+if (ui.hidden) collapseNow();
+
 setInterval(() => renderPhrase(), ROTATE_MS);
