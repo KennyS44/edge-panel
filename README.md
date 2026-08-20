@@ -22,7 +22,8 @@ without reminding myself to?
 
 ## Features
 
-- **Draggable panel.** Move it by the title bar; the position is remembered.
+- **Draggable panel.** Move it by the three lines in the corner; the position
+  is remembered.
 - **Snaps to the nearest screen edge** when you let go of it — left, right, top
   or bottom.
 - **A magnet switch** in the title bar. Turn it off and an open panel stays
