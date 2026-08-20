@@ -369,7 +369,7 @@ async function runSmoke() {
   const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
   console.log('SMOKE ' + JSON.stringify({
     edge: state.window.edge, workArea: wa,
-    opened, folded, reopened, shut, open, free, foldedFree,
+    opened, beforeFold, folded, reopened, shut, open, free, foldedFree,
     heights: { onMain, onPhrases, backToMain, emptyList, fullList: fullList.height },
     mainProbe, phrasesProbe,
     checks,
@@ -459,6 +459,8 @@ ipcMain.on('window:size', (_e, { width, height, snap, centre, animate, restore }
     width: Math.max(1, Math.min(Math.round(width), room.width)),
     height: Math.max(1, Math.min(Math.round(height), room.height)),
   };
+
+  if (SMOKE) console.log('SIZE ' + JSON.stringify({ width, height, snap, centre, animate, from }));
 
   let target;
   if (snap) {
