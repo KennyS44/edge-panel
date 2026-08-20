@@ -264,7 +264,9 @@ async function runSmoke() {
   note('magnetOffStaysFree', free.x === 400 && free.y === 300);
 
   const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
-  console.log('SMOKE ' + JSON.stringify({ edge: state.window.edge, workArea: wa, checks }));
+  console.log('SMOKE ' + JSON.stringify({
+    edge: state.window.edge, workArea: wa, opened, folded, reopened, free, checks,
+  }));
   console.log(failed.length ? `SMOKE FAILED: ${failed.join(', ')}` : 'SMOKE OK');
 
   app.isQuitting = true;
