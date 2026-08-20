@@ -8,14 +8,14 @@
 </head>
 <body>
 
-<div class="panel" id="panel">
+<div class="panel" id="panel" data-edge="right" data-axis="x">
   <div class="panel__fold">
     <div class="panel__content">
 
       <header class="bar" id="bar">
         <span class="bar__grip" aria-hidden="true"></span>
         <span class="bar__title">Edge</span>
-        <button class="icon-btn" id="hideBtn" type="button" title="Свернуть к краю">
+        <button class="icon-btn hide-btn" id="hideBtn" type="button" title="Свернуть к краю">
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 3l5 5-5 5M14 8H3"/></svg>
           <span class="sr-only">Свернуть</span>
         </button>
@@ -62,7 +62,6 @@
         </div>
         <input class="input" id="noteTitle" type="text" placeholder="Название" autocomplete="off">
         <textarea class="textarea" id="noteBody" placeholder="Текст заметки…"></textarea>
-        <p class="hint">Сохраняется автоматически</p>
       </div>
 
       <!-- phrase list editor -->
@@ -76,18 +75,14 @@
           <span class="count" id="phrasesCount">0</span>
         </div>
         <div class="phrase-rows" id="phraseRows"></div>
-        <div class="row">
-          <button class="btn" id="addPhraseBtn" type="button">+ Фраза</button>
-          <button class="btn btn--ghost" id="phrasesResetBtn" type="button">Базовые</button>
-        </div>
-        <p class="hint">Изменения сохраняются сразу.</p>
+        <button class="btn btn--full" id="addPhraseBtn" type="button">+ Фраза</button>
       </div>
 
     </div>
   </div>
 </div>
 
-<button class="tab" id="tab" type="button" title="Развернуть панель">
+<button class="tab tab--x" id="tab" type="button" title="Развернуть панель">
   <span class="tab__mark"></span>
   <span class="sr-only">Развернуть панель</span>
 </button>

@@ -21,8 +21,10 @@ without reminding myself to?
 ## Features
 
 - **Draggable panel.** Move it by the title bar; the position is remembered.
-- **Folds sideways into its own edge**, leaving a thin tab; one click brings it
-  back.
+- **Snaps to the nearest screen edge** when you let go of it — left, right, top
+  or bottom.
+- **Folds into that edge**, leaving nothing but a small tab; one click brings it
+  back. The fold runs sideways or up and down, whichever the edge calls for.
 - **Random phrase** on start, a button for the next one, and a slow auto-change
   every 15 minutes.
 - **Editable phrase list**: one block per phrase, each growing to fit its text,
@@ -42,12 +44,17 @@ Plain HTML, CSS and JavaScript. No build step, no dependencies — `index.html`,
 ## Roadmap — the desktop app
 
 1. Wrap in Electron: frameless window, always on top, transparent background.
-2. Dock to the monitor edge, dragging handled by the window itself.
-3. Start with the system via `app.setLoginItemSettings({ openAtLogin: true })`.
-4. Tray icon: show, hide, quit.
-5. Move storage from `localStorage` to a file in `userData`, so notes do not
+2. Snap to the real monitor edges, dragging handled by the window itself.
+   Use the work area rather than the raw screen size, so the panel sits on top
+   of the taskbar instead of underneath it.
+3. **Several monitors.** Snapping follows the display under the cursor
+   (`screen.getDisplayNearestPoint`), so one drag moves the panel to the next
+   screen and it sticks to that screen's edge.
+4. Start with the system via `app.setLoginItemSettings({ openAtLogin: true })`.
+5. Tray icon: show, hide, quit.
+6. Move storage from `localStorage` to a file in `userData`, so notes do not
    depend on the browser cache.
-6. Build an installer.
+7. Build an installer.
 
 ## Deliberately out of scope
 

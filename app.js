@@ -23,6 +23,7 @@ const DEFAULT_PHRASES = [
 
 const ROTATE_MS = 15 * 60 * 1000;
 const CONFIRM_MS = 4000;
+const SNAP_MS = 240;
 
 /* ---------- storage ---------- */
 
@@ -45,10 +46,16 @@ function save(key, value) {
 
 let phrases = load(STORE.phrases, DEFAULT_PHRASES);
 let notes = load(STORE.notes, []);
-let ui = load(STORE.ui, { right: null, top: null, notesOpen: false, hidden: false });
+let ui = load(STORE.ui, {});
 
 if (!Array.isArray(phrases)) phrases = DEFAULT_PHRASES.slice();
 if (!Array.isArray(notes)) notes = [];
+
+const EDGES = ['left', 'right', 'top', 'bottom'];
+if (!EDGES.includes(ui.edge)) ui.edge = 'right';
+if (typeof ui.offset !== 'number') ui.offset = 24;
+ui.notesOpen = Boolean(ui.notesOpen);
+ui.hidden = Boolean(ui.hidden);
 
 /* ---------- elements ---------- */
 
@@ -116,6 +123,13 @@ function autoGrow(el) {
   if (el.scrollHeight) el.style.height = `${el.scrollHeight}px`;
 }
 
+/* Re-measure every field: adding rows can bring in a scrollbar, which narrows
+   them and rewraps the text after the first measurement. */
+function growAll() {
+  const fields = phraseRows.querySelectorAll('.phrase-row__input');
+  requestAnimationFrame(() => fields.forEach(autoGrow));
+}
+
 let phrasesSaveTimer = null;
 
 function savePhrasesSoon() {
@@ -166,12 +180,15 @@ function renderPhraseRows(focusIndex = -1) {
     }
   });
 
+  growAll();
   phrasesCount.textContent = String(phrases.length);
 }
 
-function trimPhrases() {
+function leavePhrases() {
   phrases = phrases.map((p) => p.trim()).filter(Boolean);
   save(STORE.phrases, phrases);
+  renderPhrase(false);
+  showView('main');
 }
 
 /* ---------- notes ---------- */
@@ -311,58 +328,106 @@ function closeNote() {
   showView('main');
 }
 
-/* ---------- position ---------- */
+/* ---------- position: always stuck to one edge ---------- */
 
-/* Anchored by the right edge, so collapsing folds the panel into that edge. */
-function placePanel(right, top) {
-  const w = panel.offsetWidth;
-  const h = panel.offsetHeight;
-  const maxRight = Math.max(0, window.innerWidth - w);
-  const maxTop = Math.max(0, window.innerHeight - h);
-  ui.right = Math.min(Math.max(0, right), maxRight);
-  ui.top = Math.min(Math.max(0, top), maxTop);
-  panel.style.right = `${ui.right}px`;
-  panel.style.top = `${ui.top}px`;
+const isX = (edge) => edge === 'left' || edge === 'right';
+const clamp = (v, min, max) => Math.min(Math.max(v, min), Math.max(min, max));
+
+/* Anchors the panel to its edge, so folding collapses into that edge. */
+function anchorPanel() {
+  const rect = panel.getBoundingClientRect();
+  const limit = isX(ui.edge)
+    ? window.innerHeight - rect.height
+    : window.innerWidth - rect.width;
+  ui.offset = clamp(ui.offset, 0, limit);
+
+  panel.dataset.edge = ui.edge;
+  panel.dataset.axis = isX(ui.edge) ? 'x' : 'y';
   panel.style.left = 'auto';
+  panel.style.right = 'auto';
+  panel.style.top = 'auto';
+  panel.style.bottom = 'auto';
+  panel.style[ui.edge] = '0px';
+  if (isX(ui.edge)) panel.style.top = `${ui.offset}px`;
+  else panel.style.left = `${ui.offset}px`;
 }
 
 let drag = null;
+let snapTimer = null;
 
 bar.addEventListener('pointerdown', (e) => {
   if (e.target.closest('button')) return;
+  clearTimeout(snapTimer);
   const rect = panel.getBoundingClientRect();
-  drag = { dx: rect.right - e.clientX, dy: e.clientY - rect.top };
+  /* switch to free left/top positioning for the duration of the drag */
+  panel.style.right = 'auto';
+  panel.style.bottom = 'auto';
+  panel.style.left = `${rect.left}px`;
+  panel.style.top = `${rect.top}px`;
+  drag = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
   panel.classList.add('panel--dragging');
   bar.setPointerCapture(e.pointerId);
 });
 
 bar.addEventListener('pointermove', (e) => {
   if (!drag) return;
-  placePanel(window.innerWidth - (e.clientX + drag.dx), e.clientY - drag.dy);
+  const w = panel.offsetWidth;
+  const h = panel.offsetHeight;
+  panel.style.left = `${clamp(e.clientX - drag.dx, 0, window.innerWidth - w)}px`;
+  panel.style.top = `${clamp(e.clientY - drag.dy, 0, window.innerHeight - h)}px`;
 });
 
 function endDrag(e) {
   if (!drag) return;
   drag = null;
-  panel.classList.remove('panel--dragging');
   if (bar.hasPointerCapture(e.pointerId)) bar.releasePointerCapture(e.pointerId);
+
+  const rect = panel.getBoundingClientRect();
+  const gap = {
+    left: rect.left,
+    right: window.innerWidth - rect.right,
+    top: rect.top,
+    bottom: window.innerHeight - rect.bottom,
+  };
+  const edge = EDGES.reduce((a, b) => (gap[b] < gap[a] ? b : a));
+
+  /* glide to the edge, then hand over to edge anchoring */
+  panel.classList.remove('panel--dragging');
+  const left = edge === 'left' ? 0
+    : edge === 'right' ? window.innerWidth - rect.width : rect.left;
+  const top = edge === 'top' ? 0
+    : edge === 'bottom' ? window.innerHeight - rect.height : rect.top;
+  panel.style.left = `${left}px`;
+  panel.style.top = `${top}px`;
+
+  ui.edge = edge;
+  ui.offset = isX(edge) ? top : left;
   save(STORE.ui, ui);
+  snapTimer = setTimeout(anchorPanel, SNAP_MS);
 }
 
 bar.addEventListener('pointerup', endDrag);
 bar.addEventListener('pointercancel', endDrag);
 
 window.addEventListener('resize', () => {
-  if (ui.right !== null) placePanel(ui.right, ui.top);
+  if (!drag) anchorPanel();
   if (ui.hidden) placeTab();
+  if (!views.phrases.classList.contains('view--hidden')) growAll();
 });
 
 /* ---------- fold / unfold ---------- */
 
 function placeTab() {
   const rect = panel.getBoundingClientRect();
-  tab.style.right = `${Math.max(0, window.innerWidth - rect.right)}px`;
-  tab.style.top = `${rect.top + rect.height / 2}px`;
+  tab.classList.toggle('tab--x', isX(ui.edge));
+  tab.classList.toggle('tab--y', !isX(ui.edge));
+  tab.style.left = 'auto';
+  tab.style.right = 'auto';
+  tab.style.top = 'auto';
+  tab.style.bottom = 'auto';
+  tab.style[ui.edge] = '0px';
+  if (isX(ui.edge)) tab.style.top = `${rect.top + rect.height / 2}px`;
+  else tab.style.left = `${rect.left + rect.width / 2}px`;
 }
 
 function setHidden(hidden) {
@@ -397,23 +462,12 @@ $('editPhrasesBtn').addEventListener('click', () => {
   renderPhraseRows();
 });
 
-$('phrasesBackBtn').addEventListener('click', () => {
-  trimPhrases();
-  renderPhrase(false);
-  showView('main');
-});
+$('phrasesBackBtn').addEventListener('click', leavePhrases);
 
 $('addPhraseBtn').addEventListener('click', () => {
   phrases.push('');
   save(STORE.phrases, phrases);
   renderPhraseRows(phrases.length - 1);
-});
-
-$('phrasesResetBtn').addEventListener('click', () => {
-  phrases = DEFAULT_PHRASES.slice();
-  save(STORE.phrases, phrases);
-  renderPhraseRows();
-  renderPhrase(false);
 });
 
 document.addEventListener('click', (e) => {
@@ -424,18 +478,14 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (confirmingRow) { clearConfirm(); return; }
   if (!views.note.classList.contains('view--hidden')) closeNote();
-  else if (!views.phrases.classList.contains('view--hidden')) {
-    trimPhrases();
-    renderPhrase(false);
-    showView('main');
-  }
+  else if (!views.phrases.classList.contains('view--hidden')) leavePhrases();
 });
 
 /* ---------- start ---------- */
 
 renderNotes();
 renderPhrase(false);
-setNotesOpen(Boolean(ui.notesOpen));
-if (ui.right !== null && ui.top !== null) placePanel(ui.right, ui.top);
-setHidden(Boolean(ui.hidden));
+setNotesOpen(ui.notesOpen);
+anchorPanel();
+setHidden(ui.hidden);
 setInterval(() => renderPhrase(), ROTATE_MS);

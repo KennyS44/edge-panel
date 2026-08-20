@@ -69,16 +69,13 @@ body {
   border-radius: 999px;
 }
 
-/* ---------- panel: folds sideways into its own right edge ---------- */
+/* ---------- panel ---------- */
 
 .panel {
   position: fixed;
-  top: 24px;
-  right: 24px;
-  left: auto;
   display: grid;
-  grid-template-columns: 1fr;
-  max-height: calc(100vh - 48px);
+  max-width: 100vw;
+  max-height: 100vh;
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
@@ -86,12 +83,24 @@ body {
   overflow: hidden;
   transition:
     grid-template-columns .28s var(--ease),
+    grid-template-rows .28s var(--ease),
+    background-color .28s var(--ease),
     border-color .28s var(--ease),
-    box-shadow .28s var(--ease);
+    box-shadow .28s var(--ease),
+    top .22s var(--ease),
+    left .22s var(--ease);
 }
 
+/* fold axis follows the edge the panel is stuck to */
+.panel[data-axis="x"] { grid-template-columns: 1fr; }
+.panel[data-axis="y"] { grid-template-rows: 1fr; }
+
+.panel--collapsed[data-axis="x"] { grid-template-columns: 0fr; }
+.panel--collapsed[data-axis="y"] { grid-template-rows: 0fr; }
+
+/* nothing but the tab is left behind */
 .panel--collapsed {
-  grid-template-columns: 0fr;
+  background-color: transparent;
   border-color: transparent;
   box-shadow: none;
 }
@@ -101,14 +110,25 @@ body {
   box-shadow: 0 16px 40px rgba(0, 0, 0, .55);
 }
 
-/* the fold column: content is pinned to the right, so it is clipped
-   from the left as the column closes */
+/* square off the side that touches the screen edge */
+.panel[data-edge="right"]  { border-radius: var(--r-lg) 0 0 var(--r-lg); }
+.panel[data-edge="left"]   { border-radius: 0 var(--r-lg) var(--r-lg) 0; }
+.panel[data-edge="top"]    { border-radius: 0 0 var(--r-lg) var(--r-lg); }
+.panel[data-edge="bottom"] { border-radius: var(--r-lg) var(--r-lg) 0 0; }
+
+/* the fold: content is pinned to the touched edge, so it is clipped from the
+   far side as the track closes */
 .panel__fold {
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
   display: flex;
-  justify-content: flex-end;
 }
+
+.panel[data-edge="right"]  .panel__fold { justify-content: flex-end; }
+.panel[data-edge="left"]   .panel__fold { justify-content: flex-start; }
+.panel[data-edge="top"]    .panel__fold { align-items: flex-start; }
+.panel[data-edge="bottom"] .panel__fold { align-items: flex-end; }
 
 .panel__content {
   width: var(--width);
@@ -116,7 +136,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-height: calc(100vh - 48px);
+  max-height: 100vh;
 }
 
 /* ---------- title bar ---------- */
@@ -231,7 +251,7 @@ body {
 
 .btn--ghost:hover { background: var(--surface); color: var(--text); }
 
-.btn--full { flex: 1; }
+.btn--full { flex: none; }
 
 .icon-btn {
   width: 32px;
@@ -261,12 +281,16 @@ body {
   stroke-linejoin: round;
 }
 
+/* the arrow points at the edge the panel will fold into */
+.hide-btn svg { transition: transform .2s var(--ease); }
+[data-edge="left"]   .hide-btn svg { transform: rotate(180deg); }
+[data-edge="top"]    .hide-btn svg { transform: rotate(-90deg); }
+[data-edge="bottom"] .hide-btn svg { transform: rotate(90deg); }
+
 :where(button, input, textarea):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-
-.row { display: flex; gap: 8px; flex: none; }
 
 /* ---------- notes ---------- */
 
@@ -414,15 +438,13 @@ body {
 .note-row.is-confirming .note-del svg { display: none; }
 .note-row.is-confirming .note-del .del-text { display: block; }
 
-.empty,
-.hint {
+.empty {
   margin: 0;
+  padding: 4px 0 12px;
   font-size: 14px;
   color: var(--muted);
   flex: none;
 }
-
-.empty { padding: 4px 0 12px; }
 
 /* ---------- phrase editor ---------- */
 
@@ -440,6 +462,7 @@ body {
   display: flex;
   align-items: flex-start;
   gap: 4px;
+  flex: none;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
@@ -499,11 +522,6 @@ body {
 
 .tab {
   position: fixed;
-  top: 50%;
-  right: 0;
-  transform: translateY(-50%);
-  width: 16px;
-  height: 72px;
   display: grid;
   place-items: center;
   padding: 0;
@@ -513,7 +531,7 @@ body {
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
-  transition: opacity .2s var(--ease) .08s, width .16s var(--ease), background .16s var(--ease);
+  transition: opacity .2s var(--ease) .1s, background .16s var(--ease);
 }
 
 .tab.is-visible {
@@ -521,11 +539,24 @@ body {
   pointer-events: auto;
 }
 
-.tab:hover { width: 22px; background: var(--surface-2); }
+.tab:hover { background: var(--surface-2); }
+
+.tab--x {
+  width: 16px;
+  height: 72px;
+  transform: translateY(-50%);
+}
+
+.tab--y {
+  width: 72px;
+  height: 16px;
+  transform: translateX(-50%);
+}
 
 .tab__mark {
-  width: 3px;
-  height: 32px;
   border-radius: 999px;
   background: var(--accent);
 }
+
+.tab--x .tab__mark { width: 3px; height: 32px; }
+.tab--y .tab__mark { width: 32px; height: 3px; }
