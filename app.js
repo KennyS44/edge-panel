@@ -18,6 +18,7 @@ const SLICE = { [STORE.phrases]: 'phrases', [STORE.notes]: 'notes', [STORE.ui]: 
    the OS grants and a target that is comfortable to hit. */
 const TAB_LONG = 110;
 const TAB_SHORT = 26;
+const PANEL_WIDTH = 320;
 
 const DEFAULT_PHRASES = [
   'Сделал руками дважды — на третий раз automate it.',
@@ -105,6 +106,7 @@ function showView(name) {
   for (const [key, el] of Object.entries(views)) {
     el.classList.toggle('view--hidden', key !== name);
   }
+  scheduleSize();   /* a different view is a different height */
 }
 
 /* ---------- phrases ---------- */
@@ -436,12 +438,36 @@ function applyPlacement() {
 function applyEdgeAttrs() {
   panel.dataset.edge = ui.edge;
   panel.dataset.axis = isX(ui.edge) ? 'x' : 'y';
-  panel.style.left = 'auto';
-  panel.style.right = 'auto';
-  panel.style.top = 'auto';
-  panel.style.bottom = 'auto';
+
+  if (DESKTOP) {
+    /* the panel simply is the window, so it fills it — that is also what lets
+       the view scroll once the window hits the edge of the screen */
+    panel.style.inset = '0px';
+    return;
+  }
+
+  panel.style.inset = 'auto';
   panel.style[ui.edge] = '0px';
   panel.style[isX(ui.edge) ? 'top' : 'left'] = '0px';
+}
+
+/* How tall the panel wants to be: the title bar plus everything in the open
+   view. Measured from the view's own content — never from the rendered height,
+   which the window itself limits, so asking that would lock the size in place
+   and the notes could never open. */
+function desiredHeight() {
+  const view = panel.querySelector('.view:not(.view--hidden)');
+  return Math.ceil(bar.offsetHeight + (view ? view.scrollHeight : 0));
+}
+
+/* Every change of content — a view opening, a note added, a phrase wrapping
+   onto another line — reports a new size, collapsed into one frame. */
+let sizeFrame = 0;
+
+function scheduleSize() {
+  if (!DESKTOP || ui.hidden) return;
+  cancelAnimationFrame(sizeFrame);
+  sizeFrame = requestAnimationFrame(() => reportSize());
 }
 
 /* Tells the shell how much room the panel needs right now. Folding is the only
@@ -455,13 +481,7 @@ function reportSize({ snap = ui.magnet, restore = false, centre = false, animate
       { snap: true, centre, animate });
     return;
   }
-  /* scrollHeight, not the rendered height: if anything clamps the content to
-     the current window, the rendered height can never exceed it and the window
-     could never grow again — the notes section could not open */
-  const content = panel.querySelector('.panel__content');
-  const box = content.getBoundingClientRect();
-  const height = Math.max(Math.ceil(box.height), content.scrollHeight);
-  HOST.setSize(Math.ceil(box.width), height, { snap, restore, centre, animate });
+  HOST.setSize(PANEL_WIDTH, desiredHeight(), { snap, restore, centre, animate });
 }
 
 /* Anchors the panel to its edge, so folding collapses into that edge. */
@@ -783,10 +803,22 @@ async function start() {
   if (ui.hidden) collapseNow();
 
   if (DESKTOP) {
-    /* whatever changes the panel's height — a note opening, the list growing —
-       the window follows it */
-    new ResizeObserver(() => { if (!ui.hidden) reportSize(); })
-      .observe(panel.querySelector('.panel__content'));
+    /* Two watchers, because they catch different things: the observer sees
+       animated heights (the notes accordion), the mutations see content
+       appearing (a note added, a field grown). */
+    const content = panel.querySelector('.panel__content');
+    const resize = new ResizeObserver(scheduleSize);
+    resize.observe(content);
+    for (const view of Object.values(views)) resize.observe(view);
+
+    new MutationObserver(scheduleSize).observe(content, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['class', 'style', 'hidden'],
+    });
+
+    reportSize({ snap: ui.magnet });
   }
 
   setInterval(() => renderPhrase(), ROTATE_MS);

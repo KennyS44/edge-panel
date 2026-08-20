@@ -312,11 +312,44 @@ async function runSmoke() {
   note('foldedDocksWithMagnetOff', isFlush(foldedFree, wa, state.window.edge));
   note('tabFillsWindow', await win.webContents.executeJavaScript(
     "document.getElementById('tab').classList.contains('tab--fill')"));
+  await click('tab');
+  await wait(700);
+  await click('magnetBtn');
+  await wait(400);
+
+  /* every view has its own height and the window has to follow */
+  const onMain = win.getBounds().height;
+  await click('editPhrasesBtn');
+  await wait(500);
+  const onPhrases = win.getBounds().height;
+  await click('phrasesBackBtn');
+  await wait(500);
+  const backToMain = win.getBounds().height;
+  note('phraseListResizesWindow', onPhrases !== onMain);
+  note('leavingViewRestoresHeight', Math.abs(backToMain - onMain) <= 4);
+
+  /* adding notes grows it, up to the screen, and then the list scrolls */
+  const emptyList = win.getBounds().height;
+  state.notes = Array.from({ length: 40 }, (_, i) => ({
+    id: `bulk${i}`, title: `Заметка ${i + 1}`, body: 'т', updated: Date.now() - i * 1000,
+  }));
+  writeState();
+  win.reload();                      /* the real path: file -> renderer -> size */
+  await wait(2500);
+  const fullList = win.getBounds();
+  note('notesGrowWindow', fullList.height > emptyList);
+  note('neverTallerThanScreen', fullList.height <= wa.height);
+  note('listStillScrolls', await win.webContents.executeJavaScript(
+    "const l = document.getElementById('noteList'); l.scrollHeight > l.clientHeight + 4"));
+  note('viewStillScrollable', await win.webContents.executeJavaScript(
+    "getComputedStyle(document.getElementById('viewMain')).overflowY === 'auto'"));
 
   const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
   console.log('SMOKE ' + JSON.stringify({
     edge: state.window.edge, workArea: wa,
-    opened, folded, reopened, shut, open, free, foldedFree, checks,
+    opened, folded, reopened, shut, open, free, foldedFree,
+    heights: { onMain, onPhrases, backToMain, emptyList, fullList: fullList.height },
+    checks,
   }));
   console.log(failed.length ? `SMOKE FAILED: ${failed.join(', ')}` : 'SMOKE OK');
 
@@ -397,7 +430,12 @@ ipcMain.on('window:magnet', (_e, on) => {
 ipcMain.on('window:size', (_e, { width, height, snap, centre, animate, restore }) => {
   if (!win) return;
   const from = win.getBounds();
-  const size = { width: Math.max(1, Math.round(width)), height: Math.max(1, Math.round(height)) };
+  const room = displayFor(from).workArea;
+  /* never taller than the screen it is on — beyond that the panel scrolls */
+  const size = {
+    width: Math.max(1, Math.min(Math.round(width), room.width)),
+    height: Math.max(1, Math.min(Math.round(height), room.height)),
+  };
 
   let target;
   if (snap) {

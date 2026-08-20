@@ -682,7 +682,16 @@ body.is-desktop { background: var(--bg); }
   border: 0;
 }
 
-.is-desktop .panel__content { max-height: none; }
+/* Capped at the window, which the shell caps at the screen: past that the view
+   scrolls instead of the window growing off the edge of the display. The size
+   the panel asks for is measured from its content, not from this, so the cap
+   can never lock the window at its current height. */
+.is-desktop .panel__content {
+  max-height: 100vh;
+  width: 100%;
+}
+
+.is-desktop .view { flex: 1 1 auto; }
 
 /* the window shrinks and the panel steps aside; no CSS fold in this build */
 .panel--gone {
