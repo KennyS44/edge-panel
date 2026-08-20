@@ -535,6 +535,14 @@ bar.addEventListener('pointercancel', endDrag);
 
 window.addEventListener('resize', () => {
   if (drag) return;
+  /* On the desktop a resize is the shell's own doing — the window is not
+     resizable. Reporting a size back mid-animation would overwrite the target
+     it is travelling to, which is exactly how the tab lost its centring. */
+  if (DESKTOP) {
+    placeTab();
+    if (!views.phrases.classList.contains('view--hidden')) growAll();
+    return;
+  }
   if (ui.hidden) { anchorPanel(); placeTab(); }
   else applyPlacement();
   if (!views.phrases.classList.contains('view--hidden')) growAll();
