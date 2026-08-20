@@ -457,7 +457,19 @@ function applyEdgeAttrs() {
    and the notes could never open. */
 function desiredHeight() {
   const view = panel.querySelector('.view:not(.view--hidden)');
-  return Math.ceil(bar.offsetHeight + (view ? view.scrollHeight : 0));
+  if (!view) return bar.offsetHeight;
+
+  /* The cap that keeps the panel inside the window is 100vh — and in a window
+     sized to its own content, that is the current height. Measuring under it
+     would only ever return the size we already have, so it comes off for the
+     measurement and goes back on before anything is painted. */
+  const content = panel.querySelector('.panel__content');
+  const capped = content.style.maxHeight;
+  content.style.maxHeight = 'none';
+  const wanted = bar.offsetHeight + view.scrollHeight;
+  content.style.maxHeight = capped;
+
+  return Math.ceil(wanted);
 }
 
 /* Every change of content — a view opening, a note added, a phrase wrapping
