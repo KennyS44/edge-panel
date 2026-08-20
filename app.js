@@ -362,7 +362,9 @@ function closeNote() {
 const isX = (edge) => edge === 'left' || edge === 'right';
 const clamp = (v, min, max) => Math.min(Math.max(v, min), Math.max(min, max));
 
-const isFree = () => !ui.magnet && ui.free !== null;
+/* On the desktop the window itself is the position, so "free" only depends on
+   the magnet — there is no stored CSS offset to wait for. */
+const isFree = () => (DESKTOP ? !ui.magnet : !ui.magnet && ui.free !== null);
 
 /* Switches to plain left/top positioning without moving the panel. */
 function freezeToLeftTop() {
@@ -440,21 +442,24 @@ function applyEdgeAttrs() {
   panel.style[isX(ui.edge) ? 'top' : 'left'] = '0px';
 }
 
-/* Tells the shell how much room the panel needs right now. */
-function reportSize({ snap = ui.magnet, restore = false } = {}) {
+/* Tells the shell how much room the panel needs right now. Folding is the only
+   case that re-centres and animates; a phrase gaining a line must not move the
+   window around. */
+function reportSize({ snap = ui.magnet, restore = false, centre = false, animate = false } = {}) {
   if (!DESKTOP) return;
   if (ui.hidden) {
     const across = isX(ui.edge);
-    HOST.setSize(across ? TAB_SHORT : TAB_LONG, across ? TAB_LONG : TAB_SHORT, { snap: true });
+    HOST.setSize(across ? TAB_SHORT : TAB_LONG, across ? TAB_LONG : TAB_SHORT,
+      { snap: true, centre, animate });
     return;
   }
   const box = panel.querySelector('.panel__content').getBoundingClientRect();
-  HOST.setSize(Math.ceil(box.width), Math.ceil(box.height), { snap, restore });
+  HOST.setSize(Math.ceil(box.width), Math.ceil(box.height), { snap, restore, centre, animate });
 }
 
 /* Anchors the panel to its edge, so folding collapses into that edge. */
 function anchorPanel() {
-  if (DESKTOP) { applyEdgeAttrs(); reportSize({ snap: true }); return; }
+  if (DESKTOP) { applyEdgeAttrs(); reportSize(); return; }
   const rect = panel.getBoundingClientRect();
   const limit = isX(ui.edge)
     ? window.innerHeight - rect.height
@@ -578,7 +583,19 @@ function placeTab() {
   tab.dataset.edge = ui.edge;
   tab.classList.toggle('tab--x', isX(ui.edge));
   tab.classList.toggle('tab--y', !isX(ui.edge));
-  if (DESKTOP) return;   /* the collapsed window is the tab */
+
+  if (DESKTOP) {
+    /* pinned to the edge of the window, centred across it — as the window
+       shrinks to the tab's size the two end up the same thing */
+    tab.style.left = 'auto';
+    tab.style.right = 'auto';
+    tab.style.top = 'auto';
+    tab.style.bottom = 'auto';
+    tab.style[ui.edge] = '0px';
+    tab.style[isX(ui.edge) ? 'top' : 'left'] = '50%';
+    return;
+  }
+
   const rect = panel.getBoundingClientRect();
   tab.style.left = 'auto';
   tab.style.right = 'auto';
@@ -591,8 +608,15 @@ function placeTab() {
 
 function collapseNow() {
   placeTab();
-  panel.classList.add('panel--collapsed');
+  /* on the desktop the shrinking window does the folding; the panel only has
+     to get out of the way */
+  panel.classList.add(DESKTOP ? 'panel--gone' : 'panel--collapsed');
   tab.classList.add('is-visible');
+}
+
+function expandNow() {
+  panel.classList.remove('panel--collapsed', 'panel--gone');
+  tab.classList.remove('is-visible');
 }
 
 function setHidden(hidden) {
@@ -601,17 +625,14 @@ function setHidden(hidden) {
   clearTimeout(snapTimer);
 
   if (DESKTOP) {
+    /* the window and the panel move together: no bare rectangle is ever left
+       standing while one waits for the other */
     if (hidden) {
-      /* fold inside the full-size window first, shrink it once that is done */
       collapseNow();
-      foldTimer = setTimeout(() => reportSize(), 320);
+      reportSize({ snap: true, centre: true, animate: true });
     } else {
-      /* grow the window first, then let the panel unfold into the new room */
-      reportSize({ snap: ui.magnet, restore: !ui.magnet });
-      requestAnimationFrame(() => {
-        panel.classList.remove('panel--collapsed');
-        tab.classList.remove('is-visible');
-      });
+      expandNow();
+      reportSize({ snap: ui.magnet, restore: !ui.magnet, centre: true, animate: true });
     }
     save(STORE.ui, ui);
     return;
@@ -648,6 +669,7 @@ function setHidden(hidden) {
 nextBtn.addEventListener('click', () => renderPhrase());
 magnetBtn.addEventListener('click', () => setMagnet(!ui.magnet));
 $('hideBtn').addEventListener('click', () => setHidden(true));
+$('quitBtn').addEventListener('click', () => { if (DESKTOP) HOST.quit(); });
 tab.addEventListener('click', () => setHidden(false));
 
 notesToggle.addEventListener('click', () => setNotesOpen(!ui.notesOpen));
@@ -704,9 +726,14 @@ async function start() {
     }
     /* the shell decides which edge the window ended up on */
     HOST.onEdge((edge) => {
-      if (!EDGES.includes(edge)) return;
+      if (!EDGES.includes(edge) || edge === ui.edge) return;
       ui.edge = edge;
+      /* switching sides while folded must not animate: the fold axis flips and
+         a tweened panel would flash open on the way */
+      panel.classList.add('panel--no-anim');
       applyEdgeAttrs();
+      if (ui.hidden) placeTab();
+      requestAnimationFrame(() => panel.classList.remove('panel--no-anim'));
     });
   }
 

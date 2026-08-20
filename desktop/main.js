@@ -75,9 +75,11 @@ function nearestEdge(bounds) {
 
 const clamp = (v, min, max) => Math.min(Math.max(v, min), Math.max(min, max));
 
-/* Puts a box of this size flush against `edge`, keeping it centred on where
-   it already was along that edge. */
-function alignedBounds(size, from, edge) {
+/* Puts a box of this size flush against `edge`.
+   `centre` keeps it on the same middle line — right for folding, where the tab
+   should appear where the panel was. Without it the leading corner stays put,
+   so a phrase growing by a line does not shove the whole panel around. */
+function alignedBounds(size, from, edge, centre) {
   const wa = displayFor(from).workArea;
   const width = Math.round(size.width);
   const height = Math.round(size.height);
@@ -87,10 +89,10 @@ function alignedBounds(size, from, edge) {
 
   if (edge === 'left' || edge === 'right') {
     x = edge === 'left' ? wa.x : wa.x + wa.width - width;
-    y = Math.round(from.y + from.height / 2 - height / 2);
+    if (centre) y = Math.round(from.y + from.height / 2 - height / 2);
   } else {
     y = edge === 'top' ? wa.y : wa.y + wa.height - height;
-    x = Math.round(from.x + from.width / 2 - width / 2);
+    if (centre) x = Math.round(from.x + from.width / 2 - width / 2);
   }
 
   return {
@@ -101,12 +103,37 @@ function alignedBounds(size, from, edge) {
   };
 }
 
+/* Electron cannot tween setBounds on Windows, so we step it ourselves. The
+   window has to shrink together with the fold, or a bare rectangle is left
+   sitting on screen until it catches up. */
+let animation = null;
+
+function animateBounds(to, ms = 200) {
+  if (!win) return;
+  const from = win.getBounds();
+  const started = Date.now();
+  clearInterval(animation);
+
+  animation = setInterval(() => {
+    if (!win || win.isDestroyed()) { clearInterval(animation); animation = null; return; }
+    const t = Math.min(1, (Date.now() - started) / ms);
+    const e = 1 - Math.pow(1 - t, 3);   /* ease-out, matches the CSS curve */
+    win.setBounds({
+      x: Math.round(from.x + (to.x - from.x) * e),
+      y: Math.round(from.y + (to.y - from.y) * e),
+      width: Math.round(from.width + (to.width - from.width) * e),
+      height: Math.round(from.height + (to.height - from.height) * e),
+    });
+    if (t === 1) { clearInterval(animation); animation = null; }
+  }, 16);
+}
+
 function snapToEdge() {
   if (!win) return;
   const bounds = win.getBounds();
   const edge = nearestEdge(bounds);
   state.window.edge = edge;
-  win.setBounds(alignedBounds(bounds, bounds, edge));
+  win.setBounds(alignedBounds(bounds, bounds, edge, false));
   win.webContents.send('edge', edge);
   saveSoon();
 }
@@ -122,8 +149,14 @@ function createWindow() {
     x: Number.isInteger(stored.x) ? stored.x : undefined,
     y: Number.isInteger(stored.y) ? stored.y : undefined,
     frame: false,
-    transparent: true,
+    /* Not a transparent window: on Windows the compositor blends one badly
+       and the panel ends up washed out with the wallpaper showing through.
+       The window is exactly the panel, so it can simply be opaque. */
+    transparent: false,
+    backgroundColor: '#0b0c0e',
     hasShadow: false,
+    minWidth: 1,
+    minHeight: 1,
     resizable: false,
     maximizable: false,
     minimizable: false,
@@ -131,7 +164,6 @@ function createWindow() {
     skipTaskbar: true,
     alwaysOnTop: true,
     show: false,
-    backgroundColor: '#00000000',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -150,11 +182,13 @@ function createWindow() {
     if (SMOKE) setTimeout(runSmoke, 2500);
   });
 
-  /* the OS moves the window (the title bar is an app-region), we tidy up after */
+  /* The OS moves the window (the title bar is an app-region) and we tidy up
+     after. Windows fires 'moved' all through a drag, so this waits for the
+     movement to actually stop — snapping mid-drag fights the mouse. */
   win.on('moved', () => {
     clearTimeout(movedTimer);
     movedTimer = setTimeout(() => {
-      if (!win) return;
+      if (!win || animation) return;
       const bounds = win.getBounds();
       if (state.window.magnet) {
         snapToEdge();
@@ -167,7 +201,7 @@ function createWindow() {
         win.webContents.send('edge', edge);
         saveSoon();
       }
-    }, 80);
+    }, 250);
   });
 }
 
@@ -180,22 +214,57 @@ function isFlush(b, wa, edge) {
   return b.y + b.height === wa.y + wa.height;
 }
 
-function runSmoke() {
-  const bounds = win.getBounds();
-  const wa = displayFor(bounds).workArea;
-  const checks = {
-    visible: win.isVisible(),
-    alwaysOnTop: win.isAlwaysOnTop(),
-    /* the renderer measured itself and the shell obeyed */
-    widthFromRenderer: bounds.width === 320,
-    heightFromRenderer: bounds.height > 150,
-    flushToEdge: isFlush(bounds, wa, state.window.edge),
-    insideWorkArea: bounds.y >= wa.y && bounds.y + bounds.height <= wa.y + wa.height,
-    trayCreated: tray !== null,
-  };
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const click = (id) =>
+  win.webContents.executeJavaScript(`document.getElementById('${id}').click()`);
+
+async function runSmoke() {
+  const checks = {};
+  const note = (name, ok) => { checks[name] = ok; };
+
+  const wa = displayFor(win.getBounds()).workArea;
+  const opened = win.getBounds();
+
+  note('visible', win.isVisible());
+  note('alwaysOnTop', win.isAlwaysOnTop());
+  note('widthFromRenderer', opened.width === 320);
+  note('heightFromRenderer', opened.height > 150);
+  note('flushToEdge', isFlush(opened, wa, state.window.edge));
+  note('trayCreated', tray !== null);
+  note('quitButtonPresent', await win.webContents.executeJavaScript(
+    "getComputedStyle(document.getElementById('quitBtn')).display !== 'none'"));
+
+  /* folding: the window must end up exactly the size of the tab, not a
+     panel-sized rectangle painted yellow */
+  await click('hideBtn');
+  await wait(700);
+  const folded = win.getBounds();
+  note('foldedToTabSize', folded.width === 14 && folded.height === 72);
+  note('foldedFlush', isFlush(folded, wa, state.window.edge));
+  note('foldedCentred', Math.abs((folded.y + folded.height / 2) - (opened.y + opened.height / 2)) <= 2);
+
+  await click('tab');
+  await wait(700);
+  const reopened = win.getBounds();
+  note('unfoldedBack', reopened.width === 320 && reopened.height > 150);
+
+  /* a phrase changing height must not drag the window around */
+  const before = win.getBounds();
+  for (let i = 0; i < 3; i++) { await click('nextBtn'); await wait(350); }
+  const after = win.getBounds();
+  note('staysPutOnPhraseChange', after.y === before.y && after.x === before.x);
+
+  /* with the magnet off nothing may pull it back to an edge */
+  await click('magnetBtn');
+  await wait(200);
+  win.setBounds({ x: 400, y: 300, width: after.width, height: after.height });
+  await wait(400);
+  for (let i = 0; i < 2; i++) { await click('nextBtn'); await wait(350); }
+  const free = win.getBounds();
+  note('magnetOffStaysFree', free.x === 400 && free.y === 300);
 
   const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
-  console.log('SMOKE ' + JSON.stringify({ edge: state.window.edge, bounds, workArea: wa, checks }));
+  console.log('SMOKE ' + JSON.stringify({ edge: state.window.edge, workArea: wa, checks }));
   console.log(failed.length ? `SMOKE FAILED: ${failed.join(', ')}` : 'SMOKE OK');
 
   app.isQuitting = true;
@@ -263,26 +332,31 @@ ipcMain.on('window:magnet', (_e, on) => {
   saveSoon();
 });
 
-/* The renderer measures itself and asks for room. `snap` means "put me against
-   the edge" — used when folding, and always when the magnet is on. */
-ipcMain.on('window:size', (_e, { width, height, snap, restore }) => {
+/* The renderer measures itself and asks for room.
+   snap    — sit flush against the edge (always true while folded)
+   centre  — keep the same middle line, used when folding and unfolding
+   animate — tween there instead of jumping
+   restore — a magnet-off panel returns to where it was left standing */
+ipcMain.on('window:size', (_e, { width, height, snap, centre, animate, restore }) => {
   if (!win) return;
   const from = win.getBounds();
   const size = { width: Math.max(1, Math.round(width)), height: Math.max(1, Math.round(height)) };
 
+  let target;
   if (snap) {
-    win.setBounds(alignedBounds(size, from, state.window.edge));
-    return;
+    target = alignedBounds(size, from, state.window.edge, centre);
+  } else {
+    const base = restore && freePos ? { ...from, ...freePos } : from;
+    const wa = displayFor(base).workArea;
+    target = {
+      ...size,
+      x: clamp(base.x, wa.x, wa.x + wa.width - size.width),
+      y: clamp(base.y, wa.y, wa.y + wa.height - size.height),
+    };
   }
 
-  const target = restore && freePos ? { ...from, ...freePos } : from;
-  const wa = displayFor(target).workArea;
-  win.setBounds({
-    width: size.width,
-    height: size.height,
-    x: clamp(target.x, wa.x, wa.x + wa.width - size.width),
-    y: clamp(target.y, wa.y, wa.y + wa.height - size.height),
-  });
+  if (animate) animateBounds(target);
+  else { clearInterval(animation); animation = null; win.setBounds(target); }
 });
 
 ipcMain.handle('app:autostart', (_e, value) => {
