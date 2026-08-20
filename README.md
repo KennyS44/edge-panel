@@ -29,8 +29,9 @@ without reminding myself to?
   wherever you drop it; folding still pulls it to the nearest edge, because
   that is the only place a tab makes sense, and unfolding brings it back to
   the spot you chose.
-- **Folds into that edge**, leaving nothing but a small tab; one click brings it
-  back. The fold runs sideways or up and down, whichever the edge calls for.
+- **Folds into an app icon** parked past the top-left corner of the screen, with
+  a hairline left showing so it covers none of the desktop icons. Brush that
+  corner with the cursor and it slides out; move away and it tucks back in.
 - **Random phrase** on start, a button for the next one, and a slow auto-change
   every 15 minutes.
 - **Editable phrase list**: one block per phrase, each growing to fit its text,
