@@ -145,9 +145,14 @@ function autoGrow(el) {
 
 /* Re-measure every field: adding rows can bring in a scrollbar, which narrows
    them and rewraps the text after the first measurement. */
-function growAll() {
+function growAll(keepScroll) {
   const fields = phraseRows.querySelectorAll('.phrase-row__input');
-  requestAnimationFrame(() => fields.forEach(autoGrow));
+  requestAnimationFrame(() => {
+    fields.forEach(autoGrow);
+    /* restored after the fields settle, not before: growing them moves the
+       content under the scrollbar */
+    if (typeof keepScroll === 'number') phraseRows.scrollTop = keepScroll;
+  });
 }
 
 let phrasesSaveTimer = null;
@@ -158,7 +163,7 @@ function savePhrasesSoon() {
 }
 
 /* One block per phrase: a growing field plus its own delete button. */
-function renderPhraseRows(focusIndex = -1) {
+function renderPhraseRows(focusIndex = -1, keepScroll = null) {
   phraseRows.textContent = '';
 
   phrases.forEach((text, i) => {
@@ -187,8 +192,7 @@ function renderPhraseRows(focusIndex = -1) {
       const keepScroll = phraseRows.scrollTop;   /* the list is rebuilt below */
       phrases.splice(i, 1);
       save(STORE.phrases, phrases);
-      renderPhraseRows();
-      phraseRows.scrollTop = keepScroll;
+      renderPhraseRows(-1, keepScroll);
       renderPhrase(false);
     });
 
@@ -202,7 +206,7 @@ function renderPhraseRows(focusIndex = -1) {
     }
   });
 
-  growAll();
+  growAll(keepScroll);
   phrasesCount.textContent = String(phrases.length);
 }
 
