@@ -13,11 +13,8 @@ const DESKTOP = HOST !== null;
 
 const SLICE = { [STORE.phrases]: 'phrases', [STORE.notes]: 'notes', [STORE.ui]: 'ui' };
 
-/* The collapsed window. Windows will not shrink a window down to a 14px strip,
-   so asking for one left a dead rectangle around the tab; this is both a size
-   the OS grants and a target that is comfortable to hit. */
-const TAB_LONG = 110;
-const TAB_SHORT = 26;
+/* Folded, the panel becomes a plain app icon parked past the top-left corner.
+   The shell owns that geometry; here it is only the size of the button. */
 const PANEL_WIDTH = 320;
 
 const DEFAULT_PHRASES = [
@@ -95,6 +92,7 @@ const noteTitle = $('noteTitle');
 const noteBody = $('noteBody');
 const phraseRows = $('phraseRows');
 const phrasesCount = $('phrasesCount');
+const edgeSensor = $('edgeSensor');
 const magnetBtn = $('magnetBtn');
 
 let openNoteId = null;
@@ -495,17 +493,17 @@ function scheduleSize() {
    window around. */
 function reportSize({ snap = ui.magnet, restore = false, centre = false, animate = false } = {}) {
   if (!DESKTOP) return;
-  const across = isX(ui.edge);
-  const width = ui.hidden ? (across ? TAB_SHORT : TAB_LONG) : PANEL_WIDTH;
-  const height = ui.hidden ? (across ? TAB_LONG : TAB_SHORT) : desiredHeight();
+  if (ui.hidden) return;      /* folded: the shell owns the geometry */
+
+  const height = desiredHeight();
 
   /* nothing new to say: repeating it would keep the window resizing itself
      for no reason */
-  const said = `${width}x${height}:${snap}${restore}`;
-  if (said === lastSent && !centre && !animate) return;
+  const said = `${height}:${snap}${restore}`;
+  if (said === lastSent && !animate) return;
   lastSent = said;
 
-  HOST.setSize(width, height, { snap: ui.hidden || snap, restore, centre, animate });
+  HOST.setSize(PANEL_WIDTH, height, { snap, restore, animate });
 }
 
 /* Anchors the panel to its edge, so folding collapses into that edge. */
@@ -587,15 +585,12 @@ bar.addEventListener('pointercancel', endDrag);
 window.addEventListener('resize', () => {
   if (drag) return;
   /* On the desktop a resize is the shell's own doing — the window is not
-     resizable. Reporting a size back mid-animation would overwrite the target
-     it is travelling to, which is exactly how the tab lost its centring. */
+     resizable — so there is nothing to answer, only fields to re-measure. */
   if (DESKTOP) {
-    placeTab();
     if (!views.phrases.classList.contains('view--hidden')) growAll();
     return;
   }
-  if (ui.hidden) { anchorPanel(); placeTab(); }
-  else applyPlacement();
+  if (!ui.hidden) applyPlacement();
   if (!views.phrases.classList.contains('view--hidden')) growAll();
 });
 
@@ -638,58 +633,21 @@ function setMagnet(on) {
 
 let foldTimer = null;
 
-function placeTab() {
-  tab.dataset.edge = ui.edge;
-  tab.classList.toggle('tab--x', isX(ui.edge));
-  tab.classList.toggle('tab--y', !isX(ui.edge));
-
-  if (DESKTOP) {
-    /* pinned to the edge of the window, centred across it — as the window
-       shrinks to the tab's size the two end up the same thing */
-    tab.style.left = 'auto';
-    tab.style.right = 'auto';
-    tab.style.top = 'auto';
-    tab.style.bottom = 'auto';
-    tab.style[ui.edge] = '0px';
-    tab.style[isX(ui.edge) ? 'top' : 'left'] = '50%';
-    return;
-  }
-
-  const rect = panel.getBoundingClientRect();
-  tab.style.left = 'auto';
-  tab.style.right = 'auto';
-  tab.style.top = 'auto';
-  tab.style.bottom = 'auto';
-  tab.style[ui.edge] = '0px';
-  if (isX(ui.edge)) tab.style.top = `${rect.top + rect.height / 2}px`;
-  else tab.style.left = `${rect.left + rect.width / 2}px`;
-}
-
-/* The OS decides the final size of a tiny window, so rather than guess it the
-   tab simply takes whatever the window turned out to be. */
-function fillTab() {
-  tab.classList.add('tab--fill');
-  tab.style.left = '0px';
-  tab.style.right = '0px';
-  tab.style.top = '0px';
-  tab.style.bottom = '0px';
-}
-
-function unfillTab() {
-  clearTimeout(foldTimer);
-  tab.classList.remove('tab--fill');
-  placeTab();
+/* Nothing to place any more: the icon always sits in the same corner. In the
+   browser that corner is the viewport's, on the desktop it is the screen's and
+   the shell parks the window there. */
+function armSensor(on) {
+  edgeSensor.classList.toggle('is-armed', on);
 }
 
 function collapseNow() {
-  placeTab();
-  /* on the desktop the shrinking window does the folding; the panel only has
-     to get out of the way */
+  armSensor(true);
   panel.classList.add(DESKTOP ? 'panel--gone' : 'panel--collapsed');
   tab.classList.add('is-visible');
 }
 
 function expandNow() {
+  armSensor(false);
   panel.classList.remove('panel--collapsed', 'panel--gone');
   tab.classList.remove('is-visible');
 }
@@ -702,17 +660,16 @@ function setHidden(hidden) {
   if (DESKTOP) {
     /* the window and the panel move together: no bare rectangle is ever left
        standing while one waits for the other */
-    HOST.setFolded(hidden);
     if (hidden) {
+      /* fade the panel out first, then let the shell shrink the window to an
+         icon and walk it off the corner */
       collapseNow();
-      reportSize({ snap: true, centre: true, animate: true });
-      /* once the window is down to tab size, the tab takes the whole of it —
-         no dead border to miss with the mouse */
-      foldTimer = setTimeout(fillTab, 240);
+      foldTimer = setTimeout(() => HOST.fold(true), 140);
     } else {
-      unfillTab();
-      expandNow();
-      reportSize({ snap: ui.magnet, restore: !ui.magnet, centre: true, animate: true });
+      /* the other way round: room first, contents second */
+      clearTimeout(foldTimer);
+      HOST.fold(false);
+      foldTimer = setTimeout(expandNow, 180);
     }
     save(STORE.ui, ui);
     return;
@@ -732,13 +689,11 @@ function setHidden(hidden) {
     /* unfold and travel back to where it was left, in one motion */
     freezeToLeftTop();
     void panel.offsetWidth;
-    panel.classList.remove('panel--collapsed');
+    expandNow();
     panel.classList.add('panel--free');
-    tab.classList.remove('is-visible');
     requestAnimationFrame(() => placeFree(ui.free.left, ui.free.top));
   } else {
-    panel.classList.remove('panel--collapsed');
-    tab.classList.remove('is-visible');
+    expandNow();
   }
 
   save(STORE.ui, ui);
@@ -808,11 +763,8 @@ async function start() {
     HOST.onEdge((edge) => {
       if (!EDGES.includes(edge) || edge === ui.edge) return;
       ui.edge = edge;
-      /* switching sides while folded must not animate: the fold axis flips and
-         a tweened panel would flash open on the way */
       panel.classList.add('panel--no-anim');
       applyEdgeAttrs();
-      if (ui.hidden) placeTab();
       requestAnimationFrame(() => panel.classList.remove('panel--no-anim'));
     });
   }

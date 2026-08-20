@@ -13,6 +13,14 @@ const fsSync = require('node:fs');
 const EDGES = ['left', 'right', 'top', 'bottom'];
 const DEFAULT_SIZE = { width: 320, height: 420 };
 
+/* Folded, the window becomes a plain app icon and walks off the top-left
+   corner, leaving a hairline behind so the desktop icons stay clear. Brushing
+   that corner with the cursor slides it back out. */
+const ICON = 48;
+const PEEK = 4;                        /* how much stays on screen */
+const SENSOR = { width: 26, height: 150 };
+const CURSOR_MS = 140;
+
 /* `--smoke` boots the app, checks the window came up where it should and
    exits. CI runs it headless, since a window cannot be unit-tested. */
 const SMOKE = process.argv.includes('--smoke');
@@ -23,6 +31,10 @@ let state = { phrases: null, notes: null, ui: {}, window: {} };
 let freePos = null;      /* where a magnet-off panel was left standing */
 let saveTimer = null;
 let movedTimer = null;
+let restoreBounds = null;   /* where the panel stood before it folded */
+let parkDisplay = null;
+let cursorTimer = null;
+let revealed = false;
 
 /* ---------- state file ---------- */
 
@@ -150,6 +162,66 @@ function snapToEdge() {
   saveSoon();
 }
 
+/* ---------- folded: the parked icon ---------- */
+
+function iconBounds(hiding) {
+  const wa = (parkDisplay || screen.getPrimaryDisplay()).workArea;
+  return {
+    x: hiding ? wa.x - (ICON - PEEK) : wa.x,
+    y: wa.y + 8,
+    width: ICON,
+    height: ICON,
+  };
+}
+
+function setRevealed(on) {
+  if (on === revealed) return;
+  revealed = on;
+  animateBounds(iconBounds(!on), 140);
+}
+
+/* The icon lives mostly off screen, so it cannot receive a mouse-over of its
+   own — the cursor is watched instead, and only while folded. */
+function watchCursor(on) {
+  clearInterval(cursorTimer);
+  cursorTimer = null;
+  if (!on) return;
+
+  cursorTimer = setInterval(() => {
+    if (!win || win.isDestroyed()) return;
+    const wa = (parkDisplay || screen.getPrimaryDisplay()).workArea;
+    const p = screen.getCursorScreenPoint();
+    const near = p.x <= wa.x + SENSOR.width
+      && p.y >= wa.y
+      && p.y <= wa.y + SENSOR.height;
+    setRevealed(near);
+  }, CURSOR_MS);
+}
+
+function fold() {
+  if (!win) return;
+  restoreBounds = win.getBounds();
+  parkDisplay = displayFor(restoreBounds);
+  state.window.folded = true;
+  revealed = false;
+  animateBounds(iconBounds(true), 220);
+  setTimeout(() => watchCursor(true), 240);
+  saveSoon();
+}
+
+function unfold() {
+  if (!win) return;
+  watchCursor(false);
+  state.window.folded = false;
+  revealed = false;
+
+  const size = restoreBounds || { ...DEFAULT_SIZE, x: 0, y: 0 };
+  const target = state.window.magnet
+    ? alignedBounds(size, size, state.window.edge, false)
+    : size;
+  animateBounds(target, 220);
+}
+
 /* ---------- window ---------- */
 
 function createWindow() {
@@ -202,9 +274,8 @@ function createWindow() {
     movedTimer = setTimeout(() => {
       if (!win || animation) return;
       const bounds = win.getBounds();
-      /* folded always sticks: a tab floating in the middle of the screen is
-         not a thing, whatever the magnet says */
-      if (state.window.magnet || state.window.folded) {
+      if (state.window.folded) return;   /* parked by us, not dragged by anyone */
+      if (state.window.magnet) {
         snapToEdge();
       } else {
         freePos = { x: bounds.x, y: bounds.y };
@@ -248,22 +319,27 @@ async function runSmoke() {
   note('quitButtonPresent', await win.webContents.executeJavaScript(
     "getComputedStyle(document.getElementById('quitBtn')).display !== 'none'"));
 
-  /* folding: the window must end up exactly the size of the tab, not a
-     panel-sized rectangle painted yellow */
-  const beforeFold = win.getBounds();
+  /* folding: down to an app icon, parked past the top-left corner */
   await click('hideBtn');
-  await wait(700);
+  await wait(900);
   const folded = win.getBounds();
-  /* the OS may refuse to go this small; what matters is that it is far below
-     the panel and the tab covers it */
-  note('foldedToTabSize', folded.width <= 40 && folded.height <= 130);
-  note('foldedFlush', isFlush(folded, wa, state.window.edge));
-  note('foldedCentred', Math.abs((folded.y + folded.height / 2) - (beforeFold.y + beforeFold.height / 2)) <= 2);
+  note('foldedToIcon', folded.width === ICON && folded.height === ICON);
+  note('parkedPastCorner', folded.x === wa.x - (ICON - PEEK));
+  note('parkedAtTop', folded.y === wa.y + 8);
+
+  /* the cursor cannot be moved from here, so the reveal is driven directly */
+  setRevealed(true);
+  await wait(400);
+  note('revealSlidesOut', win.getBounds().x === wa.x);
+  setRevealed(false);
+  await wait(400);
+  note('hidesAgainWhenCursorLeaves', win.getBounds().x === wa.x - (ICON - PEEK));
 
   await click('tab');
-  await wait(700);
+  await wait(900);
   const reopened = win.getBounds();
   note('unfoldedBack', reopened.width === 320 && reopened.height > 150);
+  note('unfoldedFlush', isFlush(reopened, wa, state.window.edge));
 
   /* a phrase changing height must not drag the window around */
   const before = win.getBounds();
@@ -306,15 +382,13 @@ async function runSmoke() {
   const free = win.getBounds();
   note('magnetOffStaysFree', free.x === 400 && free.y === 300);
 
-  /* but folding still docks it, magnet or not */
+  /* folding from a free position still parks in the same corner */
   await click('hideBtn');
-  await wait(700);
+  await wait(900);
   const foldedFree = win.getBounds();
-  note('foldedDocksWithMagnetOff', isFlush(foldedFree, wa, state.window.edge));
-  note('tabFillsWindow', await win.webContents.executeJavaScript(
-    "document.getElementById('tab').classList.contains('tab--fill')"));
+  note('freePanelParksToo', foldedFree.x === wa.x - (ICON - PEEK) && foldedFree.width === ICON);
   await click('tab');
-  await wait(700);
+  await wait(900);
   await click('magnetBtn');
   await wait(400);
 
@@ -369,7 +443,7 @@ async function runSmoke() {
   const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
   console.log('SMOKE ' + JSON.stringify({
     edge: state.window.edge, workArea: wa,
-    opened, beforeFold, folded, reopened, shut, open, free, foldedFree,
+    opened, folded, reopened, shut, open, free, foldedFree,
     heights: { onMain, onPhrases, backToMain, emptyList, fullList: fullList.height },
     mainProbe, phrasesProbe,
     checks,
@@ -434,8 +508,9 @@ ipcMain.on('state:save', (_e, patch) => {
   saveSoon();
 });
 
-ipcMain.on('window:folded', (_e, folded) => {
-  state.window.folded = Boolean(folded);
+ipcMain.on('window:fold', (_e, folded) => {
+  if (folded) fold();
+  else unfold();
 });
 
 ipcMain.on('window:magnet', (_e, on) => {
@@ -451,7 +526,7 @@ ipcMain.on('window:magnet', (_e, on) => {
    animate — tween there instead of jumping
    restore — a magnet-off panel returns to where it was left standing */
 ipcMain.on('window:size', (_e, { width, height, snap, centre, animate, restore }) => {
-  if (!win) return;
+  if (!win || state.window.folded) return;
   const from = win.getBounds();
   const room = displayFor(from).workArea;
   /* never taller than the screen it is on — beyond that the panel scrolls */
