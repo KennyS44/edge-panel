@@ -1,7 +1,7 @@
 {
   "name": "edge-panel",
   "productName": "Edge Panel",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Always-on desktop widget: a random phrase from your own list and quick notes, docked to the edge of the screen.",
   "author": "KennyS44",
   "license": "MIT",
