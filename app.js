@@ -6,6 +6,17 @@ const STORE = {
   ui: 'edge.ui',
 };
 
+/* The desktop build injects this bridge; in a browser it is simply absent and
+   everything below falls back to localStorage and CSS positioning. */
+const HOST = window.edge || null;
+const DESKTOP = HOST !== null;
+
+const SLICE = { [STORE.phrases]: 'phrases', [STORE.notes]: 'notes', [STORE.ui]: 'ui' };
+
+/* the collapsed window is exactly the tab */
+const TAB_LONG = 72;
+const TAB_SHORT = 14;
+
 const DEFAULT_PHRASES = [
   'Сделал руками дважды — на третий раз automate it.',
   'Маленькое и working целиком бьёт большое и наполовину.',
@@ -42,6 +53,9 @@ function save(key, value) {
   } catch {
     /* приватный режим или переполнение — молча работаем без сохранения */
   }
+  /* on the desktop the file in userData is the real store; localStorage above
+     just keeps the two builds on one code path */
+  if (DESKTOP) HOST.save({ [SLICE[key]]: value });
 }
 
 let phrases = load(STORE.phrases, DEFAULT_PHRASES);
@@ -388,6 +402,7 @@ function glideToEdge(rect) {
 }
 
 function placeFree(left, top) {
+  if (DESKTOP) { applyEdgeAttrs(); reportSize({ snap: false, restore: true }); return; }
   const w = panel.offsetWidth;
   const h = panel.offsetHeight;
   ui.free = {
@@ -412,8 +427,34 @@ function applyPlacement() {
   }
 }
 
+/* Points the panel at its edge. On the desktop the window is exactly the size
+   of the panel, so pinning to the window edge is all the positioning needed. */
+function applyEdgeAttrs() {
+  panel.dataset.edge = ui.edge;
+  panel.dataset.axis = isX(ui.edge) ? 'x' : 'y';
+  panel.style.left = 'auto';
+  panel.style.right = 'auto';
+  panel.style.top = 'auto';
+  panel.style.bottom = 'auto';
+  panel.style[ui.edge] = '0px';
+  panel.style[isX(ui.edge) ? 'top' : 'left'] = '0px';
+}
+
+/* Tells the shell how much room the panel needs right now. */
+function reportSize({ snap = ui.magnet, restore = false } = {}) {
+  if (!DESKTOP) return;
+  if (ui.hidden) {
+    const across = isX(ui.edge);
+    HOST.setSize(across ? TAB_SHORT : TAB_LONG, across ? TAB_LONG : TAB_SHORT, { snap: true });
+    return;
+  }
+  const box = panel.querySelector('.panel__content').getBoundingClientRect();
+  HOST.setSize(Math.ceil(box.width), Math.ceil(box.height), { snap, restore });
+}
+
 /* Anchors the panel to its edge, so folding collapses into that edge. */
 function anchorPanel() {
+  if (DESKTOP) { applyEdgeAttrs(); reportSize({ snap: true }); return; }
   const rect = panel.getBoundingClientRect();
   const limit = isX(ui.edge)
     ? window.innerHeight - rect.height
@@ -435,6 +476,7 @@ let drag = null;
 let snapTimer = null;
 
 bar.addEventListener('pointerdown', (e) => {
+  if (DESKTOP) return;   /* the OS drags the window by the title bar */
   if (e.target.closest('button')) return;
   clearTimeout(snapTimer);
   const rect = panel.getBoundingClientRect();
@@ -503,6 +545,13 @@ function setMagnet(on) {
     ? 'Магнит: панель липнет к краю'
     : 'Магнит выключен: панель стоит где угодно';
 
+  if (DESKTOP) {
+    HOST.setMagnet(on);   /* the shell snaps the real window */
+    panel.classList.toggle('panel--free', !on && !ui.hidden);
+    save(STORE.ui, ui);
+    return;
+  }
+
   if (on) {
     ui.free = null;
     panel.classList.remove('panel--free');
@@ -526,10 +575,11 @@ function setMagnet(on) {
 let foldTimer = null;
 
 function placeTab() {
-  const rect = panel.getBoundingClientRect();
   tab.dataset.edge = ui.edge;
   tab.classList.toggle('tab--x', isX(ui.edge));
   tab.classList.toggle('tab--y', !isX(ui.edge));
+  if (DESKTOP) return;   /* the collapsed window is the tab */
+  const rect = panel.getBoundingClientRect();
   tab.style.left = 'auto';
   tab.style.right = 'auto';
   tab.style.top = 'auto';
@@ -549,6 +599,23 @@ function setHidden(hidden) {
   ui.hidden = hidden;
   clearTimeout(foldTimer);
   clearTimeout(snapTimer);
+
+  if (DESKTOP) {
+    if (hidden) {
+      /* fold inside the full-size window first, shrink it once that is done */
+      collapseNow();
+      foldTimer = setTimeout(() => reportSize(), 320);
+    } else {
+      /* grow the window first, then let the panel unfold into the new room */
+      reportSize({ snap: ui.magnet, restore: !ui.magnet });
+      requestAnimationFrame(() => {
+        panel.classList.remove('panel--collapsed');
+        tab.classList.remove('is-visible');
+      });
+    }
+    save(STORE.ui, ui);
+    return;
+  }
 
   if (hidden) {
     panel.classList.remove('panel--free');
@@ -622,13 +689,44 @@ document.addEventListener('keydown', (e) => {
 
 /* ---------- start ---------- */
 
-renderNotes();
-renderPhrase(false);
-setNotesOpen(ui.notesOpen);
+async function start() {
+  if (DESKTOP) {
+    document.body.classList.add('is-desktop');
+    try {
+      const saved = await HOST.load();
+      if (Array.isArray(saved.phrases) && saved.phrases.length) phrases = saved.phrases;
+      if (Array.isArray(saved.notes)) notes = saved.notes;
+      if (saved.ui && typeof saved.ui === 'object') ui = { ...ui, ...saved.ui };
+      if (typeof saved.magnet === 'boolean') ui.magnet = saved.magnet;
+      if (EDGES.includes(saved.edge)) ui.edge = saved.edge;
+    } catch {
+      /* first run, or the shell answered late — carry on with defaults */
+    }
+    /* the shell decides which edge the window ended up on */
+    HOST.onEdge((edge) => {
+      if (!EDGES.includes(edge)) return;
+      ui.edge = edge;
+      applyEdgeAttrs();
+    });
+  }
 
-magnetBtn.classList.toggle('is-on', ui.magnet);
-magnetBtn.setAttribute('aria-pressed', String(ui.magnet));
-applyPlacement();
-if (ui.hidden) collapseNow();
+  renderNotes();
+  renderPhrase(false);
+  setNotesOpen(ui.notesOpen);
 
-setInterval(() => renderPhrase(), ROTATE_MS);
+  magnetBtn.classList.toggle('is-on', ui.magnet);
+  magnetBtn.setAttribute('aria-pressed', String(ui.magnet));
+  applyPlacement();
+  if (ui.hidden) collapseNow();
+
+  if (DESKTOP) {
+    /* whatever changes the panel's height — a note opening, the list growing —
+       the window follows it */
+    new ResizeObserver(() => { if (!ui.hidden) reportSize(); })
+      .observe(panel.querySelector('.panel__content'));
+  }
+
+  setInterval(() => renderPhrase(), ROTATE_MS);
+}
+
+start();

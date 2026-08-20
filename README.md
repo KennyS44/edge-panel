@@ -3,11 +3,13 @@
 A small always-on desktop widget that sits at the edge of the screen: a random
 phrase from your own list, plus quick notes.
 
-**Live demo:** https://kennys44.github.io/edge-panel/
+**Download:** [Releases](https://github.com/KennyS44/edge-panel/releases) —
+installers for Windows, macOS and Linux.
+**Try it in a browser:** https://kennys44.github.io/edge-panel/
 
-The demo runs in the browser and is only a scaffold for development. The point
-of the project is a desktop app that starts with the system, so no browser
-window is needed.
+The browser version is the development scaffold and keeps working; the desktop
+app is the point — it starts with the system, floats above other windows and
+needs no browser at all.
 
 ## Why
 
@@ -38,7 +40,18 @@ without reminding myself to?
   inside the note. Empty notes are dropped instead of saved.
 - **Fixed footprint.** The note list, the note text and the phrase list scroll
   inside the panel, so it does not grow with the amount of content.
-- Everything is kept in `localStorage` and survives a reload.
+
+On the desktop it also:
+
+- **Starts with the system** and lives in the tray: show, hide, quit, and a
+  switch for launching at login.
+- **Floats above other windows** in a frameless, transparent window with no
+  taskbar entry.
+- **Respects the taskbar.** Snapping measures the display's work area, so the
+  panel sits beside the taskbar, not under it.
+- **Handles several monitors.** The edge is computed on whichever display the
+  window is currently on, so dragging it to the next screen sticks it there.
+- **Keeps notes in a file** in `userData`, not in browser storage.
 
 ## Look
 
@@ -49,27 +62,36 @@ small cannot carry two.
 
 ## Stack
 
-Plain HTML, CSS and JavaScript. No build step, no dependencies — `index.html`,
-`styles.css`, `app.js`.
+The panel itself is plain HTML, CSS and JavaScript — `index.html`,
+`styles.css`, `app.js`, no framework and no build step. The same three files
+run in a browser and inside the desktop shell; the shell is detected at
+runtime, and without it everything falls back to `localStorage` and CSS
+positioning.
 
-## Roadmap — the desktop app
+Around them, `desktop/` holds a thin Electron shell:
 
-1. Wrap in Electron: frameless window, always on top, transparent background.
-2. Snap to the real monitor edges, dragging handled by the window itself.
-   Use the work area rather than the raw screen size, so the panel sits on top
-   of the taskbar instead of underneath it.
-3. **Several monitors.** Snapping follows the display under the cursor
-   (`screen.getDisplayNearestPoint`), so one drag moves the panel to the next
-   screen and it sticks to that screen's edge.
-4. Start with the system via `app.setLoginItemSettings({ openAtLogin: true })`.
-5. Tray icon: show, hide, quit.
-6. Move storage from `localStorage` to a file in `userData`, so notes do not
-   depend on the browser cache.
-7. **Pictures inside notes** — paste or drop an image into a note. This waits
-   for step 6 on purpose: images belong on disk next to the notes file, not
-   base64-encoded into `localStorage`, which would fill its few megabytes in a
-   handful of screenshots.
-8. Build an installer.
+| File | Job |
+|---|---|
+| `desktop/main.js` | the window: where it sits, which display owns it, the tray, the state file |
+| `desktop/preload.js` | the only bridge to the page — seven calls, nothing else from Node |
+
+The split is deliberate. The page never learns it is inside Electron beyond
+one feature check, and the shell never touches the interface: it is told how
+much room the panel needs and answers with a window that size.
+
+## Building
+
+The installers are built by CI, not by hand — see
+`.github/workflows/desktop.yml`. Every push boots the real app on a virtual
+screen and lets it verify its own geometry; pushing a `v*` tag builds the
+Windows, macOS and Linux installers and attaches them to a Release.
+
+## Roadmap
+
+1. **Pictures inside notes** — paste or drop an image into a note, stored as a
+   file next to the notes rather than base64 in a text field.
+2. Keyboard shortcut to summon the panel without the mouse.
+3. Signed builds, so the installers stop warning about an unknown publisher.
 
 ## Deliberately out of scope
 

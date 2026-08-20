@@ -1,0 +1,46 @@
+{
+  "name": "edge-panel",
+  "productName": "Edge Panel",
+  "version": "0.1.0",
+  "description": "Always-on desktop widget: a random phrase from your own list and quick notes, docked to the edge of the screen.",
+  "author": "KennyS44",
+  "license": "MIT",
+  "main": "desktop/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^43.4.1",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.kennys44.edgepanel",
+    "productName": "Edge Panel",
+    "files": [
+      "index.html",
+      "styles.css",
+      "app.js",
+      "desktop/**",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "artifactName": "EdgePanel-${version}-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.productivity",
+      "artifactName": "EdgePanel-${version}-${arch}.${ext}"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Utility",
+      "artifactName": "EdgePanel-${version}.${ext}"
+    }
+  }
+}
